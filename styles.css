@@ -331,6 +331,13 @@ input, select, textarea { font-size: 16px; }
 .loading-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--text-dim); }
 .loading-emoji { font-size: 40px; animation: floaty 1.4s ease-in-out infinite; }
 
+.music-toggle-btn {
+  position: fixed; left: 16px; bottom: 16px; z-index: 90;
+  width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); font-size: 18px; cursor: pointer;
+  box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center;
+}
+
 /* ---------- mobile compact pass ---------- */
 
 @media (max-width: 480px) {
