@@ -16,7 +16,13 @@ function bpLiquor(id) {
   return [{ id, name: "BP 750", price: 1050, ml: 750, qty: 2 }];
 }
 
+// Bump this whenever the shape/content below changes — the local (GitHub
+// Pages) storage layer resets itself to the fresh seed when this differs
+// from what a visitor's browser already has saved, so edits actually show up.
+const SEED_VERSION = 3;
+
 const SEED_DATA = {
+  seedVersion: SEED_VERSION,
   config: {
     title: "PujoTun",
     tagline: "Pujo Vibes Loading... 2026",

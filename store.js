@@ -42,8 +42,9 @@ const Store = (function () {
   async function initLocal(seed) {
     mode = "local";
     const existing = readLocal();
-    state = existing || clone(seed);
-    if (!existing) writeLocal();
+    const stale = !existing || existing.seedVersion !== seed.seedVersion;
+    state = stale ? clone(seed) : existing;
+    if (stale) writeLocal();
     window.addEventListener("storage", (e) => {
       if (e.key === LS_KEY && e.newValue) {
         try {

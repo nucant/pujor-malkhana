@@ -11,11 +11,14 @@ const ui = {
   adminSection: "overview", // overview | settings | members | menu
   adminActiveDayId: null,
   dayModalOpenId: null,
+  qrModalOpen: false,
 };
 
 // ---------- boot ----------
 
 async function boot() {
+  const app = document.getElementById("app");
+  if (app) app.innerHTML = `<div class="loading-screen"><div class="loading-emoji">🍻</div><p>Loading...</p></div>`;
   state = await Store.init(SEED_DATA, (newState) => {
     state = newState;
     render();
@@ -235,7 +238,7 @@ function render() {
   else if (ui.screen === "admin") html = renderAdmin();
   else html = renderProfiles();
   app.innerHTML = html;
-  renderDayModal();
+  renderModals();
 
   if (ui.screen === "user") initUpiQr();
   if (ui.screen === "admin-gate") {
@@ -281,9 +284,36 @@ function closeDayEditorModal(e) {
   ui.dayModalOpenId = null;
   render();
 }
-function renderDayModal() {
+function openQrModal() {
+  ui.qrModalOpen = true;
+  render();
+}
+function closeQrModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  ui.qrModalOpen = false;
+  render();
+}
+
+function renderModals() {
   const root = document.getElementById("modal-root");
   if (!root) return;
+
+  if (ui.qrModalOpen) {
+    root.innerHTML = `
+      <div class="modal-overlay" onclick="closeQrModal(event)">
+        <div class="modal-box qr-modal-box" onclick="event.stopPropagation()">
+          <button class="modal-close" onclick="closeQrModal()">✕</button>
+          <div class="qr-modal-inner">
+            <div id="upi-qr-big"></div>
+            <p class="upi-id-text">${state.config ? esc(state.config.upiId) : ""}</p>
+            <button class="btn btn-primary" onclick="saveQrImage()">⬇️ Save Image</button>
+          </div>
+        </div>
+      </div>`;
+    initUpiQrBig();
+    return;
+  }
+
   const day = ui.dayModalOpenId && state.days.find((d) => d.id === ui.dayModalOpenId);
   if (!day) {
     root.innerHTML = "";
@@ -365,7 +395,7 @@ function renderUser() {
     ui.activeDayId = defaultDayId();
   }
   const due = Math.max(0, member.share - member.paid);
-  const upiLink = buildUpiLink(cfg);
+  const payLink = buildUpiLink(cfg, "phonepe");
 
   return `
     <div class="user-screen">
@@ -387,14 +417,14 @@ function renderUser() {
       <section class="due-hero ${due > 0 ? "pending" : "clear"}">
         <span class="due-hero-label">${due > 0 ? "Tor Baki Ache" : "Status"}</span>
         <span class="due-hero-amount">${due > 0 ? money(due) : "Clear! ✅"}</span>
-        <a class="btn btn-primary btn-big" href="${esc(upiLink)}">💸 ${due > 0 ? "Taka De" : "Extra Taka De"}</a>
+        <a class="btn btn-primary btn-big" href="${esc(payLink)}">💸 ${due > 0 ? "Taka De" : "Extra Taka De"}</a>
       </section>
 
       ${renderStats(cfg, member)}
       ${renderPayCard(cfg, member)}
 
       <section class="day-section">
-        <h2 class="section-heading">Din Wari Hisab 📅</h2>
+        <h2 class="section-heading">Prottek Din er Hisab 📅</h2>
         <div class="day-accordion">${renderDayAccordion(state.days, ui.activeDayId)}</div>
       </section>
 
@@ -421,22 +451,19 @@ function renderStats(cfg, member) {
 }
 
 function renderPayCard(cfg, member) {
-  const upiLink = buildUpiLink(cfg, "upi");
-  const phonepeLink = buildUpiLink(cfg, "phonepe");
   return `
     <div class="pay-card">
       <div class="pay-qr">
-        <div class="qr-frame">
+        <button class="qr-frame" onclick="openQrModal()" title="Boro kore dekho / save koro">
           <div class="qr-pulse-ring"></div>
           <div id="upi-qr"></div>
-        </div>
+        </button>
         <span>📷 Scan Koro — sob UPI app e chole</span>
       </div>
       <div class="pay-info">
         <p class="pay-note">Amount fix na, joto khushi pathiye de. Button shob phone e nao khulte pare — na khulle QR scan koro.</p>
         <div class="pay-actions">
-          <a class="btn btn-ghost" href="${esc(upiLink)}">Pay via UPI</a>
-          <a class="btn btn-ghost" href="${esc(phonepeLink)}">PhonePe te Khulo</a>
+          <button class="btn btn-ghost" onclick="openQrModal()">🔍 QR Boro Kore Dekho</button>
           <button class="btn btn-ghost" onclick="copyUpi('${esc(cfg.upiId)}')">Copy UPI ID</button>
         </div>
         <p class="upi-id-text">${esc(cfg.upiId)} · ${esc(cfg.payeeName)}</p>
@@ -487,7 +514,7 @@ function renderDayContent(day) {
       .map(
         (item) => `
       <div class="liquor-card">
-        <div class="liquor-bottle">${bottleSvg(item.name)}</div>
+        <div class="liquor-bottle">${item.image ? `<img src="${esc(item.image)}" alt="${esc(item.name)}" />` : bottleSvg(item.name)}</div>
         <div class="liquor-info">
           <h4>${esc(item.name)}</h4>
           <div class="liquor-meta">
@@ -551,6 +578,64 @@ function initUpiQr() {
   } catch (e) {
     el.innerHTML = '<span class="qr-fallback">QR load hoyni</span>';
   }
+}
+
+function initUpiQrBig() {
+  const el = document.getElementById("upi-qr-big");
+  if (!el) return;
+  el.innerHTML = "";
+  if (typeof QRCode === "undefined") {
+    el.innerHTML = '<span class="qr-fallback">QR load hoyni</span>';
+    return;
+  }
+  try {
+    new QRCode(el, {
+      text: buildUpiLink(state.config),
+      width: 240,
+      height: 240,
+      colorDark: "#1a1114",
+      colorLight: "#f7ece4",
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  } catch (e) {
+    el.innerHTML = '<span class="qr-fallback">QR load hoyni</span>';
+  }
+}
+
+function saveQrImage() {
+  const container = document.getElementById("upi-qr-big");
+  const canvas = container && container.querySelector("canvas");
+  if (!canvas) {
+    toast("QR pawa jayni, abar try koro.");
+    return;
+  }
+  canvas.toBlob(async (blob) => {
+    if (!blob) {
+      toast("Save kora gelo na.");
+      return;
+    }
+    if (window.claude) {
+      try {
+        const downloads = await window.claude.use("downloads");
+        if (downloads) {
+          await downloads.save({ filename: "pujotun-upi-qr.png", data: blob });
+          toast("Save hoye geche! ✅");
+          return;
+        }
+      } catch (e) {
+        // fall through to the plain-download path below
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pujotun-upi-qr.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast("Save hoye geche! ✅");
+  }, "image/png");
 }
 
 function copyUpi(id) {
@@ -796,13 +881,17 @@ function renderAdminDayEditor(day) {
         </label>
       </div>
 
-      <h3 class="section-heading small">Mod List 🍾 <span class="hint-inline">(bottle icon auto hoy)</span></h3>
+      <h3 class="section-heading small">Mod List 🍾 <span class="hint-inline">(chobi upload na korle auto icon boshe)</span></h3>
       <div class="liquor-table">
-        <div class="liquor-row liquor-row-head"><span>Naam</span><span>Dam (₹)</span><span>ML</span><span>Piece</span><span></span></div>
+        <div class="liquor-row liquor-row-head liquor-row-photo"><span></span><span>Naam</span><span>Dam (₹)</span><span>ML</span><span>Piece</span><span></span></div>
         ${day.liquor
           .map(
             (item) => `
-          <div class="liquor-row">
+          <div class="liquor-row liquor-row-photo">
+            <label class="liquor-photo-btn" title="Real chobi upload koro">
+              ${item.image ? `<img src="${esc(item.image)}" alt="" />` : "📷"}
+              <input type="file" accept="image/*" hidden onchange="uploadLiquorImage('${day.id}','${item.id}', this)" />
+            </label>
             <input value="${esc(item.name)}" onchange="updateLiquorField('${day.id}','${item.id}','name', this.value)" />
             <input type="number" value="${item.price}" onchange="updateLiquorField('${day.id}','${item.id}','price', Number(this.value)||0)" />
             <input type="number" value="${item.ml}" onchange="updateLiquorField('${day.id}','${item.id}','ml', Number(this.value)||0)" />
@@ -849,6 +938,7 @@ function renderAdminDayEditor(day) {
 async function updateConfigField(field, value) {
   await Store.saveConfig({ [field]: value });
   if (field === "totalPeople") await recalcShares();
+  toast("Save hoye geche! ✅");
   render();
 }
 
@@ -857,6 +947,7 @@ async function updateMemberField(id, field, value) {
   if (!m) return;
   m[field] = value;
   await Store.saveMember(m);
+  toast("Save hoye geche! ✅");
   render();
 }
 
@@ -903,6 +994,7 @@ async function updateDayField(dayId, field, value) {
   if (!d) return;
   d[field] = value;
   await Store.saveDay(d);
+  toast("Save hoye geche! ✅");
   render();
 }
 
@@ -911,6 +1003,7 @@ async function updateSpecialField(dayId, field, value) {
   if (!d) return;
   d.special = Object.assign({}, d.special, { [field]: value });
   await Store.saveDay(d);
+  toast("Save hoye geche! ✅");
   render();
 }
 
@@ -922,6 +1015,7 @@ async function updateLiquorField(dayId, itemId, field, value) {
   it[field] = value;
   await Store.saveDay(d);
   if (field === "price" || field === "qty") await recalcShares();
+  toast("Save hoye geche! ✅");
   render();
 }
 
@@ -954,12 +1048,55 @@ async function addLiquorItem(dayId) {
   render();
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadLiquorImage(dayId, itemId, inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  if (file.size > 4 * 1024 * 1024) {
+    toast("Image ta 4MB er kom hote hobe.");
+    inputEl.value = "";
+    return;
+  }
+  const d = state.days.find((x) => x.id === dayId);
+  const it = d && d.liquor.find((x) => x.id === itemId);
+  if (!it) return;
+  toast("Upload hocche...");
+  try {
+    let url = null;
+    if (window.claude) {
+      try {
+        const assets = await window.claude.use("assets");
+        if (assets) url = (await assets.upload(file)).url;
+      } catch (e) {
+        url = null;
+      }
+    }
+    if (!url) url = await fileToDataUrl(file);
+    it.image = url;
+    await Store.saveDay(d);
+    toast("Chobi save hoye geche! ✅");
+    render();
+  } catch (e) {
+    toast("Upload fail korlo, abar try koro.");
+  }
+  inputEl.value = "";
+}
+
 async function updateChaknaField(dayId, idx, field, value) {
   const d = state.days.find((x) => x.id === dayId);
   if (!d || !d.chakna[idx]) return;
   d.chakna[idx][field] = value;
   await Store.saveDay(d);
   if (field === "price" || field === "qty") await recalcShares();
+  toast("Save hoye geche! ✅");
   render();
 }
 
