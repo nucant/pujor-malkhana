@@ -475,17 +475,11 @@ function renderStats(cfg, member) {
 function renderPayCard(cfg, member) {
   return `
     <div class="pay-card">
-      <button class="qr-open-btn" onclick="openQrModal()">
-        <span class="qr-open-icon">📷</span>
-        <span>QR Dekho</span>
-      </button>
-      <div class="pay-info">
-        <p class="pay-note">Amount fix na, joto khushi pathiye de. QR scan kora shobcheye safe — sob UPI app e chole.</p>
-        <div class="pay-actions">
-          <button class="btn btn-ghost" onclick="copyUpi('${esc(cfg.upiId)}')">Copy UPI ID</button>
-        </div>
-        <p class="upi-id-text">${esc(cfg.upiId)} · ${esc(cfg.payeeName)}</p>
+      <div class="pay-actions">
+        <button class="btn btn-primary qr-open-btn" onclick="openQrModal()">📷 QR Dekho</button>
+        <button class="btn btn-ghost" onclick="copyUpi('${esc(cfg.upiId)}')">Copy UPI ID</button>
       </div>
+      <p class="upi-id-text">${esc(cfg.upiId)} — amount fix na, joto khushi pathiye de.</p>
     </div>`;
 }
 
