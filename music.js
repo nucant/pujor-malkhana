@@ -2,41 +2,50 @@
 // This embeds a YouTube iframe, which the sandboxed Claude Artifact CSP
 // blocks (only script tags from an allowlisted CDN are permitted there,
 // no arbitrary iframes) — so this file is intentionally not loaded by
-// artifact.html. Autoplay-with-sound is also blocked by every modern
-// browser until the viewer interacts with the page; the toggle button
-// below is what actually starts audio on the first tap.
+// artifact.html.
+//
+// Tries to autoplay unmuted at low volume by default. Most desktop
+// browsers allow this; some mobile/strict browsers still block any
+// unmuted autoplay with zero interaction — the 🎵 button is the manual
+// fallback/mute toggle for those cases, not the primary way to start it.
 
 (function () {
-  var PLAYLIST_ID = "PLOdxnIRFWRIyDPxxqz6eIq0indz5BuKHn";
-  var MIN_START = 60; // never start earlier than 1 min into a track
-  var MAX_START = 180;
+  var VIDEO_ID = "Vo3-bmkC4Pw";
   var VOLUME = 26; // "halka kore" — kept low
 
   var player = null;
-  var playing = false;
+  var muted = false;
   var seeked = false;
+
+  function setBtn() {
+    var btn = document.getElementById("music-toggle");
+    if (btn) btn.textContent = muted ? "🔇" : "🔊";
+  }
+
+  function randomStart(duration) {
+    if (!duration || duration < 20) return 0;
+    // pick somewhere in the middle 60% of the track, never past the last 20s
+    var lo = Math.min(duration * 0.15, 45);
+    var hi = Math.max(lo + 5, duration * 0.75);
+    return lo + Math.random() * (hi - lo);
+  }
 
   window.onYouTubeIframeAPIReady = function () {
     player = new YT.Player("yt-bg-player", {
       height: "0",
       width: "0",
-      playerVars: {
-        listType: "playlist",
-        list: PLAYLIST_ID,
-        index: Math.floor(Math.random() * 15),
-        autoplay: 0,
-        mute: 1,
-        controls: 0,
-      },
+      videoId: VIDEO_ID,
+      playerVars: { autoplay: 1, mute: 0, controls: 0, loop: 1, playlist: VIDEO_ID },
       events: {
         onReady: function (e) {
           e.target.setVolume(VOLUME);
+          e.target.playVideo();
+          setBtn();
         },
         onStateChange: function (e) {
           if (e.data === YT.PlayerState.PLAYING && !seeked) {
             seeked = true;
-            var startAt = MIN_START + Math.floor(Math.random() * (MAX_START - MIN_START));
-            e.target.seekTo(startAt, true);
+            e.target.seekTo(randomStart(e.target.getDuration()), true);
           }
         },
       },
@@ -45,18 +54,16 @@
 
   window.toggleMusic = function () {
     if (!player) return;
-    var btn = document.getElementById("music-toggle");
-    if (!playing) {
+    if (muted) {
       player.unMute();
       player.setVolume(VOLUME);
       player.playVideo();
-      playing = true;
-      if (btn) btn.textContent = "🔊";
+      muted = false;
     } else {
-      player.pauseVideo();
-      playing = false;
-      if (btn) btn.textContent = "🎵";
+      player.mute();
+      muted = true;
     }
+    setBtn();
   };
 
   document.addEventListener("DOMContentLoaded", function () {
