@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", boot);
 // ---------- avatars (illustrated, not emoji) ----------
 
 const AVATAR_PALETTE = ["#e2483a", "#e8ab37", "#4f9b6e", "#3aa0c9", "#a05fd1", "#d6497a", "#e07b39", "#5b7fe0"];
-const AVATAR_FACES = ["wink", "dizzy", "sleepy", "wide", "shades"];
+const AVATAR_FACES = ["wink", "chill", "wide", "shades"];
 const AVATAR_TOTAL = AVATAR_PALETTE.length * AVATAR_FACES.length * 2; // * hat on/off
 
 function avatarSvg(index) {
@@ -42,17 +42,16 @@ function avatarSvg(index) {
   const bg = AVATAR_PALETTE[rest % AVATAR_PALETTE.length];
   const face = AVATAR_FACES[Math.floor(rest / AVATAR_PALETTE.length) % AVATAR_FACES.length];
   const ink = "#1a1114";
+  const blush = `<ellipse cx="18" cy="38" rx="5" ry="3" fill="#000" opacity="0.12"/><ellipse cx="46" cy="38" rx="5" ry="3" fill="#000" opacity="0.12"/>`;
   let features;
   if (face === "wink") {
-    features = `<circle cx="22" cy="28" r="4" fill="${ink}"/><path d="M38 28 q6 4 12 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M20 42 q12 10 24 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
-  } else if (face === "dizzy") {
-    features = `<path d="M16 24 l10 10 M26 24 l-10 10 M38 24 l10 10 M48 24 l-10 10" stroke="${ink}" stroke-width="3" stroke-linecap="round"/><ellipse cx="32" cy="45" rx="9" ry="6" fill="${ink}"/><ellipse cx="32" cy="47" rx="4" ry="4.5" fill="#e2483a"/>`;
-  } else if (face === "sleepy") {
-    features = `<path d="M16 28 q6 -6 12 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M36 28 q6 -6 12 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M22 42 q10 6 20 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+    features = `${blush}<path d="M16 27 q6 -5 12 0" stroke="${ink}" stroke-width="3.2" fill="none" stroke-linecap="round"/><circle cx="42" cy="27" r="3.6" fill="${ink}"/><path d="M18 42 q14 11 28 0" stroke="${ink}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`;
+  } else if (face === "chill") {
+    features = `${blush}<path d="M16 27 q6 -5 12 0" stroke="${ink}" stroke-width="3.2" fill="none" stroke-linecap="round"/><path d="M36 27 q6 -5 12 0" stroke="${ink}" stroke-width="3.2" fill="none" stroke-linecap="round"/><path d="M18 41 q14 12 28 0" stroke="${ink}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`;
   } else if (face === "wide") {
-    features = `<circle cx="22" cy="28" r="6" fill="#fff"/><circle cx="23" cy="29" r="3" fill="${ink}"/><circle cx="42" cy="28" r="6" fill="#fff"/><circle cx="43" cy="29" r="3" fill="${ink}"/><ellipse cx="32" cy="44" rx="8" ry="7" fill="${ink}"/>`;
+    features = `${blush}<circle cx="21" cy="27" r="5.5" fill="#fff"/><circle cx="22" cy="28" r="3" fill="${ink}"/><circle cx="43" cy="27" r="5.5" fill="#fff"/><circle cx="44" cy="28" r="3" fill="${ink}"/><path d="M20 41 q12 10 24 0" stroke="${ink}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`;
   } else {
-    features = `<rect x="13" y="23" width="38" height="11" rx="5.5" fill="${ink}"/><rect x="29" y="26.5" width="6" height="4" fill="${ink}"/><path d="M20 42 q12 8 24 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+    features = `<rect x="12" y="22" width="40" height="11" rx="5.5" fill="${ink}"/><rect x="30" y="25.5" width="4" height="4" fill="${ink}"/>${blush}<path d="M18 42 q14 11 28 0" stroke="${ink}" stroke-width="3.2" fill="none" stroke-linecap="round"/>`;
   }
   const hatColor = AVATAR_PALETTE[(rest + 3) % AVATAR_PALETTE.length];
   const hatMarkup = hat
@@ -114,6 +113,14 @@ function fmtDateLong(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
   if (isNaN(d)) return dateStr;
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", weekday: "long" });
+}
+
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const target = new Date(dateStr + "T00:00:00");
+  const now = new Date(todayStr() + "T00:00:00");
+  if (isNaN(target) || isNaN(now)) return null;
+  return Math.round((target - now) / 86400000);
 }
 
 function defaultDayId() {
@@ -240,7 +247,6 @@ function render() {
   app.innerHTML = html;
   renderModals();
 
-  if (ui.screen === "user") initUpiQr();
   if (ui.screen === "admin-gate") {
     const inp = document.getElementById("admin-pin-input");
     if (inp) {
@@ -396,6 +402,7 @@ function renderUser() {
   }
   const due = Math.max(0, member.share - member.paid);
   const payLink = buildUpiLink(cfg, "phonepe");
+  const daysLeft = daysUntil(cfg.startDate);
 
   return `
     <div class="user-screen">
@@ -410,14 +417,29 @@ function renderUser() {
         <div class="user-who">
           <span class="who-avatar">${avatarSvg(member.avatar)}</span>
           <span class="who-name">${esc(member.name)}</span>
-          <button class="btn btn-ghost small" onclick="goProfiles()">Switch</button>
+          <button class="btn btn-ghost small logout-btn" onclick="goProfiles()" title="Profile change koro">🚪</button>
         </div>
       </header>
 
+      <div class="date-strip">
+        <span>📅 Aaj: ${fmtDateShort(todayStr())}</span>
+        ${
+          daysLeft == null
+            ? ""
+            : daysLeft > 0
+            ? `<span class="countdown-badge">⏳ ${daysLeft} Din Baki Pujo Shuru Hote!</span>`
+            : daysLeft === 0
+            ? `<span class="countdown-badge">🎉 Aaj Pujo Shuru!</span>`
+            : `<span class="countdown-badge">🎊 Pujo Cholche / Sesh!</span>`
+        }
+      </div>
+
       <section class="due-hero ${due > 0 ? "pending" : "clear"}">
         <span class="due-hero-label">${due > 0 ? "Tor Baki Ache" : "Status"}</span>
-        <span class="due-hero-amount">${due > 0 ? money(due) : "Clear! ✅"}</span>
-        <a class="btn btn-primary btn-big" href="${esc(payLink)}">💸 ${due > 0 ? "Taka De" : "Extra Taka De"}</a>
+        <div class="due-hero-row">
+          <span class="due-hero-amount">${due > 0 ? money(due) : "Clear! ✅"}</span>
+          <a class="btn btn-primary btn-big" href="${esc(payLink)}">💸 ${due > 0 ? "Taka De" : "Extra Taka De"}</a>
+        </div>
       </section>
 
       ${renderStats(cfg, member)}
@@ -453,17 +475,13 @@ function renderStats(cfg, member) {
 function renderPayCard(cfg, member) {
   return `
     <div class="pay-card">
-      <div class="pay-qr">
-        <button class="qr-frame" onclick="openQrModal()" title="Boro kore dekho / save koro">
-          <div class="qr-pulse-ring"></div>
-          <div id="upi-qr"></div>
-        </button>
-        <span>📷 Scan Koro — sob UPI app e chole</span>
-      </div>
+      <button class="qr-open-btn" onclick="openQrModal()">
+        <span class="qr-open-icon">📷</span>
+        <span>QR Dekho</span>
+      </button>
       <div class="pay-info">
-        <p class="pay-note">Amount fix na, joto khushi pathiye de. Button shob phone e nao khulte pare — na khulle QR scan koro.</p>
+        <p class="pay-note">Amount fix na, joto khushi pathiye de. QR scan kora shobcheye safe — sob UPI app e chole.</p>
         <div class="pay-actions">
-          <button class="btn btn-ghost" onclick="openQrModal()">🔍 QR Boro Kore Dekho</button>
           <button class="btn btn-ghost" onclick="copyUpi('${esc(cfg.upiId)}')">Copy UPI ID</button>
         </div>
         <p class="upi-id-text">${esc(cfg.upiId)} · ${esc(cfg.payeeName)}</p>
@@ -514,7 +532,7 @@ function renderDayContent(day) {
       .map(
         (item) => `
       <div class="liquor-card">
-        <div class="liquor-bottle">${item.image ? `<img src="${esc(item.image)}" alt="${esc(item.name)}" />` : bottleSvg(item.name)}</div>
+        <div class="liquor-bottle">${bottleSvg(item.name)}</div>
         <div class="liquor-info">
           <h4>${esc(item.name)}</h4>
           <div class="liquor-meta">
@@ -556,28 +574,6 @@ function renderDayContent(day) {
         <div class="chakna-list">${chaknaRows}</div>
       </aside>
     </div>`;
-}
-
-function initUpiQr() {
-  const el = document.getElementById("upi-qr");
-  if (!el) return;
-  el.innerHTML = "";
-  if (typeof QRCode === "undefined") {
-    el.innerHTML = '<span class="qr-fallback">QR load hoyni</span>';
-    return;
-  }
-  try {
-    new QRCode(el, {
-      text: buildUpiLink(state.config),
-      width: 128,
-      height: 128,
-      colorDark: "#1a1114",
-      colorLight: "#f7ece4",
-      correctLevel: QRCode.CorrectLevel.M,
-    });
-  } catch (e) {
-    el.innerHTML = '<span class="qr-fallback">QR load hoyni</span>';
-  }
 }
 
 function initUpiQrBig() {
@@ -881,17 +877,13 @@ function renderAdminDayEditor(day) {
         </label>
       </div>
 
-      <h3 class="section-heading small">Mod List 🍾 <span class="hint-inline">(chobi upload na korle auto icon boshe)</span></h3>
+      <h3 class="section-heading small">Mod List 🍾 <span class="hint-inline">(bottle icon naam theke auto boshe)</span></h3>
       <div class="liquor-table">
-        <div class="liquor-row liquor-row-head liquor-row-photo"><span></span><span>Naam</span><span>Dam (₹)</span><span>ML</span><span>Piece</span><span></span></div>
+        <div class="liquor-row liquor-row-head"><span>Naam</span><span>Dam (₹)</span><span>ML</span><span>Piece</span><span></span></div>
         ${day.liquor
           .map(
             (item) => `
-          <div class="liquor-row liquor-row-photo">
-            <label class="liquor-photo-btn" title="Real chobi upload koro">
-              ${item.image ? `<img src="${esc(item.image)}" alt="" />` : "📷"}
-              <input type="file" accept="image/*" hidden onchange="uploadLiquorImage('${day.id}','${item.id}', this)" />
-            </label>
+          <div class="liquor-row">
             <input value="${esc(item.name)}" onchange="updateLiquorField('${day.id}','${item.id}','name', this.value)" />
             <input type="number" value="${item.price}" onchange="updateLiquorField('${day.id}','${item.id}','price', Number(this.value)||0)" />
             <input type="number" value="${item.ml}" onchange="updateLiquorField('${day.id}','${item.id}','ml', Number(this.value)||0)" />
@@ -1046,48 +1038,6 @@ async function addLiquorItem(dayId) {
   await Store.saveDay(d);
   await recalcShares();
   render();
-}
-
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-async function uploadLiquorImage(dayId, itemId, inputEl) {
-  const file = inputEl.files && inputEl.files[0];
-  if (!file) return;
-  if (file.size > 4 * 1024 * 1024) {
-    toast("Image ta 4MB er kom hote hobe.");
-    inputEl.value = "";
-    return;
-  }
-  const d = state.days.find((x) => x.id === dayId);
-  const it = d && d.liquor.find((x) => x.id === itemId);
-  if (!it) return;
-  toast("Upload hocche...");
-  try {
-    let url = null;
-    if (window.claude) {
-      try {
-        const assets = await window.claude.use("assets");
-        if (assets) url = (await assets.upload(file)).url;
-      } catch (e) {
-        url = null;
-      }
-    }
-    if (!url) url = await fileToDataUrl(file);
-    it.image = url;
-    await Store.saveDay(d);
-    toast("Chobi save hoye geche! ✅");
-    render();
-  } catch (e) {
-    toast("Upload fail korlo, abar try koro.");
-  }
-  inputEl.value = "";
 }
 
 async function updateChaknaField(dayId, idx, field, value) {

@@ -19,7 +19,7 @@ function bpLiquor(id) {
 // Bump this whenever the shape/content below changes — the local (GitHub
 // Pages) storage layer resets itself to the fresh seed when this differs
 // from what a visitor's browser already has saved, so edits actually show up.
-const SEED_VERSION = 3;
+const SEED_VERSION = 4;
 
 const SEED_DATA = {
   seedVersion: SEED_VERSION,
@@ -38,10 +38,10 @@ const SEED_DATA = {
   // avatar: numeric index into the generated avatar set (see avatarSvg in app.js)
   members: [
     { id: "m1", name: "Sayan", avatar: 0, share: 0, paid: 0 },
-    { id: "m2", name: "Tubai", avatar: 16, share: 0, paid: 0 },
-    { id: "m3", name: "Ganesh", avatar: 32, share: 0, paid: 0 },
-    { id: "m4", name: "Somesh", avatar: 48, share: 0, paid: 0 },
-    { id: "m5", name: "Vogi", avatar: 64, share: 0, paid: 0 },
+    { id: "m2", name: "Tubai", avatar: 13, share: 0, paid: 0 },
+    { id: "m3", name: "Ganesh", avatar: 26, share: 0, paid: 0 },
+    { id: "m4", name: "Somesh", avatar: 39, share: 0, paid: 0 },
+    { id: "m5", name: "Vogi", avatar: 52, share: 0, paid: 0 },
   ],
 
   days: [
