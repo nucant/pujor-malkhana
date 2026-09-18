@@ -224,26 +224,32 @@ const NAG_MESSAGES = [
   "Taka de na bhai, {amt} pore ache — dhoirjo shesh hocche! 😤💸",
 ];
 
+function fireDueNag() {
+  if (ui.screen !== "user") {
+    stopDueReminder();
+    return;
+  }
+  const m = state.members.find((x) => x.id === ui.currentMemberId);
+  if (!m) {
+    stopDueReminder();
+    return;
+  }
+  const due = Math.max(0, m.share - m.paid);
+  if (due > 0) {
+    const msg = NAG_MESSAGES[Math.floor(Math.random() * NAG_MESSAGES.length)];
+    toast(msg.replace("{amt}", money(due)));
+  } else {
+    stopDueReminder();
+  }
+}
+
 function startDueReminder() {
   stopDueReminder();
-  _dueReminderTimer = setInterval(() => {
-    if (ui.screen !== "user") {
-      stopDueReminder();
-      return;
-    }
-    const m = state.members.find((x) => x.id === ui.currentMemberId);
-    if (!m) {
-      stopDueReminder();
-      return;
-    }
-    const due = Math.max(0, m.share - m.paid);
-    if (due > 0) {
-      const msg = NAG_MESSAGES[Math.floor(Math.random() * NAG_MESSAGES.length)];
-      toast(msg.replace("{amt}", money(due)));
-    } else {
-      stopDueReminder();
-    }
-  }, 60000);
+  // first nag at 15s after opening, then every 45s after that
+  _dueReminderTimer = setTimeout(function repeat() {
+    fireDueNag();
+    _dueReminderTimer = setTimeout(repeat, 45000);
+  }, 15000);
 }
 
 // ---------- render dispatch ----------

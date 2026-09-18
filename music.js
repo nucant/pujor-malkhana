@@ -14,12 +14,13 @@
   var VOLUME = 26; // "halka kore" — kept low
 
   var player = null;
-  var muted = false;
   var seeked = false;
 
   function setBtn() {
     var btn = document.getElementById("music-toggle");
-    if (btn) btn.textContent = muted ? "🔇" : "🔊";
+    if (!btn || !player || !player.getPlayerState) return;
+    var reallyPlaying = player.getPlayerState() === 1 && !player.isMuted();
+    btn.textContent = reallyPlaying ? "🔊" : "🎵";
   }
 
   function randomStart(duration) {
@@ -47,23 +48,23 @@
             seeked = true;
             e.target.seekTo(randomStart(e.target.getDuration()), true);
           }
+          setBtn();
         },
       },
     });
   };
 
   window.toggleMusic = function () {
-    if (!player) return;
-    if (muted) {
+    if (!player || !player.getPlayerState) return;
+    var reallyPlaying = player.getPlayerState() === 1 && !player.isMuted();
+    if (reallyPlaying) {
+      player.mute();
+    } else {
       player.unMute();
       player.setVolume(VOLUME);
       player.playVideo();
-      muted = false;
-    } else {
-      player.mute();
-      muted = true;
     }
-    setBtn();
+    setTimeout(setBtn, 150);
   };
 
   document.addEventListener("DOMContentLoaded", function () {
