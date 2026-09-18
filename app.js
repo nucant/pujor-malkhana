@@ -1,7 +1,7 @@
-// Pujor Malkhana — app logic. No framework: template strings + full re-render
-// on every state change. Simple on purpose; the interesting part is the
-// Store abstraction (store.js), which swaps localStorage for the shared
-// Claude db capability transparently.
+// PujoTun — app logic. No framework: template strings + full re-render on
+// every state change. Simple on purpose; the interesting part is the Store
+// abstraction (store.js), which swaps localStorage for the shared Claude db
+// capability transparently.
 
 let state = null;
 const ui = {
@@ -10,6 +10,7 @@ const ui = {
   activeDayId: null,
   adminSection: "overview", // overview | settings | members | menu
   adminActiveDayId: null,
+  dayModalOpenId: null,
 };
 
 // ---------- boot ----------
@@ -23,6 +24,44 @@ async function boot() {
   render();
 }
 document.addEventListener("DOMContentLoaded", boot);
+
+// ---------- avatars (illustrated, not emoji) ----------
+
+const AVATAR_PALETTE = ["#e2483a", "#e8ab37", "#4f9b6e", "#3aa0c9", "#a05fd1", "#d6497a", "#e07b39", "#5b7fe0"];
+const AVATAR_FACES = ["wink", "dizzy", "sleepy", "wide", "shades"];
+const AVATAR_TOTAL = AVATAR_PALETTE.length * AVATAR_FACES.length * 2; // * hat on/off
+
+function avatarSvg(index) {
+  const n = AVATAR_TOTAL;
+  index = (((Number(index) || 0) % n) + n) % n;
+  const hat = index % 2 === 1;
+  const rest = Math.floor(index / 2);
+  const bg = AVATAR_PALETTE[rest % AVATAR_PALETTE.length];
+  const face = AVATAR_FACES[Math.floor(rest / AVATAR_PALETTE.length) % AVATAR_FACES.length];
+  const ink = "#1a1114";
+  let features;
+  if (face === "wink") {
+    features = `<circle cx="22" cy="28" r="4" fill="${ink}"/><path d="M38 28 q6 4 12 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M20 42 q12 10 24 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  } else if (face === "dizzy") {
+    features = `<path d="M16 24 l10 10 M26 24 l-10 10 M38 24 l10 10 M48 24 l-10 10" stroke="${ink}" stroke-width="3" stroke-linecap="round"/><ellipse cx="32" cy="45" rx="9" ry="6" fill="${ink}"/><ellipse cx="32" cy="47" rx="4" ry="4.5" fill="#e2483a"/>`;
+  } else if (face === "sleepy") {
+    features = `<path d="M16 28 q6 -6 12 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M36 28 q6 -6 12 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M22 42 q10 6 20 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  } else if (face === "wide") {
+    features = `<circle cx="22" cy="28" r="6" fill="#fff"/><circle cx="23" cy="29" r="3" fill="${ink}"/><circle cx="42" cy="28" r="6" fill="#fff"/><circle cx="43" cy="29" r="3" fill="${ink}"/><ellipse cx="32" cy="44" rx="8" ry="7" fill="${ink}"/>`;
+  } else {
+    features = `<rect x="13" y="23" width="38" height="11" rx="5.5" fill="${ink}"/><rect x="29" y="26.5" width="6" height="4" fill="${ink}"/><path d="M20 42 q12 8 24 0" stroke="${ink}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  }
+  const hatColor = AVATAR_PALETTE[(rest + 3) % AVATAR_PALETTE.length];
+  const hatMarkup = hat
+    ? `<path d="M32 3 L23 17 L41 17 Z" fill="#fff" opacity="0.92"/><circle cx="32" cy="3" r="3.4" fill="${hatColor}"/>`
+    : "";
+  return `<svg viewBox="0 0 64 64" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="avatar"><circle cx="32" cy="32" r="32" fill="${bg}"/>${features}${hatMarkup}</svg>`;
+}
+
+const CHAKNA_ICON_POOL = ["🍗", "🍟", "🥟", "🍢", "🧀", "🍖", "🥘", "🍛", "🫓", "🥜", "🦐", "🍬", "🥚", "🍤", "🌽", "🥙"];
+function randomChaknaIcon() {
+  return CHAKNA_ICON_POOL[Math.floor(Math.random() * CHAKNA_ICON_POOL.length)];
+}
 
 // ---------- small utils ----------
 
@@ -67,13 +106,13 @@ function defaultDayId() {
   return hit ? hit.id : state.days[0] && state.days[0].id;
 }
 
+function dayMenuTotal(day) {
+  return day.liquor.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.qty) || 0), 0);
+}
+
 function computeMenuTotal() {
   let total = 0;
-  for (const d of state.days) {
-    for (const it of d.liquor) {
-      total += (Number(it.price) || 0) * (Number(it.qty) || 0);
-    }
-  }
+  for (const d of state.days) total += dayMenuTotal(d);
   return total;
 }
 
@@ -139,6 +178,33 @@ function closeConfirm(e) {
   _pendingConfirm = null;
 }
 
+// ---------- due reminder (nags every 2 min while on the user screen) ----------
+
+let _dueReminderTimer = null;
+function stopDueReminder() {
+  if (_dueReminderTimer) {
+    clearInterval(_dueReminderTimer);
+    _dueReminderTimer = null;
+  }
+}
+function startDueReminder() {
+  stopDueReminder();
+  _dueReminderTimer = setInterval(() => {
+    if (ui.screen !== "user") {
+      stopDueReminder();
+      return;
+    }
+    const m = state.members.find((x) => x.id === ui.currentMemberId);
+    if (!m) {
+      stopDueReminder();
+      return;
+    }
+    const due = Math.max(0, m.share - m.paid);
+    if (due > 0) toast(`Ei je 👀 ${money(due)} baki ache — Pay Now chap diye de!`);
+    else stopDueReminder();
+  }, 120000);
+}
+
 // ---------- render dispatch ----------
 
 function render() {
@@ -150,6 +216,7 @@ function render() {
   else if (ui.screen === "admin") html = renderAdmin();
   else html = renderProfiles();
   app.innerHTML = html;
+  renderDayModal();
 
   if (ui.screen === "user") initUpiQr();
   if (ui.screen === "admin-gate") {
@@ -170,17 +237,15 @@ function selectMember(id) {
   ui.screen = "user";
   ui.activeDayId = null;
   render();
+  startDueReminder();
 }
 function goProfiles() {
+  stopDueReminder();
   ui.screen = "profiles";
   render();
 }
 function goAdminGate() {
   ui.screen = "admin-gate";
-  render();
-}
-function setActiveDay(id) {
-  ui.activeDayId = id;
   render();
 }
 function setAdminSection(key) {
@@ -189,6 +254,32 @@ function setAdminSection(key) {
 }
 function setAdminDay(id) {
   ui.adminActiveDayId = id;
+  ui.dayModalOpenId = id;
+  render();
+}
+function closeDayEditorModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  ui.dayModalOpenId = null;
+  render();
+}
+function renderDayModal() {
+  const root = document.getElementById("modal-root");
+  if (!root) return;
+  const day = ui.dayModalOpenId && state.days.find((d) => d.id === ui.dayModalOpenId);
+  if (!day) {
+    root.innerHTML = "";
+    return;
+  }
+  root.innerHTML = `
+    <div class="modal-overlay" onclick="closeDayEditorModal(event)">
+      <div class="modal-box" onclick="event.stopPropagation()">
+        <button class="modal-close" onclick="closeDayEditorModal()">✕</button>
+        ${renderAdminDayEditor(day)}
+      </div>
+    </div>`;
+}
+function toggleDay(id) {
+  ui.activeDayId = ui.activeDayId === id ? null : id;
   render();
 }
 
@@ -217,7 +308,7 @@ function renderProfiles() {
     .map(
       (m) => `
       <button class="profile-tile" onclick="selectMember('${m.id}')">
-        <span class="avatar-ring"><span class="avatar-emoji">${m.avatar}</span></span>
+        <span class="avatar-ring"><span class="avatar-emoji">${avatarSvg(m.avatar)}</span></span>
         <span class="profile-name">${esc(m.name)}</span>
       </button>`
     )
@@ -234,7 +325,7 @@ function renderProfiles() {
         <div class="profiles-grid">
           ${tiles}
           <button class="profile-tile admin-tile" onclick="goAdminGate()">
-            <span class="avatar-ring admin-ring"><span class="avatar-emoji">👑</span></span>
+            <span class="avatar-ring admin-ring"><span class="avatar-emoji admin-emoji">👑</span></span>
             <span class="profile-name">Admin</span>
           </button>
         </div>
@@ -254,7 +345,8 @@ function renderUser() {
   if (!ui.activeDayId || !state.days.find((d) => d.id === ui.activeDayId)) {
     ui.activeDayId = defaultDayId();
   }
-  const day = state.days.find((d) => d.id === ui.activeDayId) || state.days[0];
+  const due = Math.max(0, member.share - member.paid);
+  const upiLink = buildUpiLink(cfg);
 
   return `
     <div class="user-screen">
@@ -267,93 +359,107 @@ function renderUser() {
           </div>
         </div>
         <div class="user-who">
-          <span class="who-avatar">${member.avatar}</span>
+          <span class="who-avatar">${avatarSvg(member.avatar)}</span>
           <span class="who-name">${esc(member.name)}</span>
           <button class="btn btn-ghost small" onclick="goProfiles()">Switch</button>
         </div>
       </header>
 
-      <section class="calendar-strip">${renderDayTabs(state.days, ui.activeDayId, "setActiveDay")}</section>
+      <section class="due-hero ${due > 0 ? "pending" : "clear"}">
+        <span class="due-hero-label">${due > 0 ? "Tor Baki Ache" : "Status"}</span>
+        <span class="due-hero-amount">${due > 0 ? money(due) : "Clear! ✅"}</span>
+        <a class="btn btn-primary btn-big" href="${esc(upiLink)}">💸 ${due > 0 ? "Pay Now Koro" : "Extra Pathate Chao?"}</a>
+      </section>
 
       ${renderStats(cfg, member)}
       ${renderPayCard(cfg, member)}
 
-      ${day ? `
       <section class="day-section">
-        <div class="day-section-head">
-          <h2>${esc(day.label)} <span class="day-section-date">${fmtDateLong(day.date)}</span></h2>
-          ${day.subtitle ? `<span class="day-subtitle">${esc(day.subtitle)}</span>` : ""}
-        </div>
-        ${renderDayContent(day)}
-      </section>` : emptyState("Kono din set kora nei ekhono. Admin ke bolo.")}
+        <h2 class="section-heading">Din Wari Hisab 📅</h2>
+        <div class="day-accordion">${renderDayAccordion(state.days, ui.activeDayId)}</div>
+      </section>
 
-      <footer class="app-footer">Toiri holo adda diye, mod diye na 😉 · Pujor Malkhana</footer>
+      <footer class="app-footer">Toiri holo adda diye, mod diye na 😉 · ${esc(cfg.title)}</footer>
     </div>`;
 }
 
-function renderDayTabs(days, activeId, fnName) {
-  const t = todayStr();
-  return days
-    .map((d) => {
-      const isToday = d.date === t;
-      const active = d.id === activeId;
-      return `
-      <button class="day-pill ${active ? "active" : ""}" onclick="${fnName}('${d.id}')">
-        <span class="day-pill-label">${esc(d.label)}</span>
-        <span class="day-pill-date">${fmtDateShort(d.date)}</span>
-        ${isToday ? '<span class="today-dot" title="Aaj"></span>' : ""}
-      </button>`;
-    })
-    .join("");
-}
-
 function renderStats(cfg, member) {
-  const due = Math.max(0, member.share - member.paid);
   return `
     <div class="stats-row">
       <div class="stat-tile">
-        <span class="stat-label">Total Budget</span>
-        <span class="stat-value">${money(cfg.totalBudget)}</span>
+        <span class="stat-label">Menu Budget</span>
+        <span class="stat-value">${money(computeMenuTotal())}</span>
       </div>
       <div class="stat-tile">
         <span class="stat-label">Total Lok</span>
-        <span class="stat-value">${cfg.totalPeople}</span>
+        <span class="stat-value">${state.members.length || cfg.totalPeople}</span>
       </div>
       <div class="stat-tile">
         <span class="stat-label">Tor Share</span>
         <span class="stat-value">${money(member.share)}</span>
       </div>
-      <div class="stat-tile ${due > 0 ? "stat-due" : "stat-clear"}">
-        <span class="stat-label">${due > 0 ? "Tor Baki" : "Status"}</span>
-        <span class="stat-value">${due > 0 ? money(due) : "Clear! ✅"}</span>
-      </div>
     </div>`;
 }
 
 function renderPayCard(cfg, member) {
-  const due = Math.max(0, member.share - member.paid);
   const upiLink = buildUpiLink(cfg);
   return `
     <div class="pay-card">
+      <div class="pay-qr">
+        <div class="qr-frame">
+          <div class="qr-pulse-ring"></div>
+          <div id="upi-qr"></div>
+        </div>
+        <span>📷 Scan Koro — sob UPI app e kaj kore</span>
+      </div>
       <div class="pay-info">
         <h3>Pay Now 💸</h3>
         <p>Amount fix na — joto khushi, tor moner moto pathiye de.</p>
-        ${
-          due > 0
-            ? `<p class="pay-suggested">Suggested: <strong>${money(due)}</strong> (tor baki ache)</p>`
-            : `<p class="pay-suggested">Tumi already clear! Chao to extra o pathate paro 😄</p>`
-        }
+        <p class="pay-note">⚠️ Niche'r button ta shob phone/UPI app e nao khulte pare (iPhone e especially) — tai <strong>QR scan kora shobcheye safe</strong>.</p>
         <div class="pay-actions">
-          <a class="btn btn-primary" href="${esc(upiLink)}">UPI App e Pay Koro</a>
+          <a class="btn btn-ghost" href="${esc(upiLink)}">Ekta UPI App Try Koro</a>
           <button class="btn btn-ghost" onclick="copyUpi('${esc(cfg.upiId)}')">Copy UPI ID</button>
         </div>
         <p class="upi-id-text">${esc(cfg.upiId)} · ${esc(cfg.payeeName)}</p>
       </div>
-      <div class="pay-qr">
-        <div id="upi-qr"></div>
-        <span>Scan Koro</span>
-      </div>
     </div>`;
+}
+
+function renderDayAccordion(days, activeId) {
+  if (!days.length) return emptyState("Kono din set kora nei ekhono. Admin ke bolo.");
+  const divisor = state.members.length || state.config.totalPeople || 1;
+  const t = todayStr();
+  return days
+    .map((d) => {
+      const open = d.id === activeId;
+      const dTotal = dayMenuTotal(d);
+      const dShare = Math.round(dTotal / divisor);
+      const isToday = d.date === t;
+      return `
+      <div class="day-acc-item ${open ? "open" : ""}">
+        <button class="day-acc-head" onclick="toggleDay('${d.id}')">
+          <span class="day-acc-title">
+            <span class="day-acc-label">${esc(d.label)}</span>
+            <span class="day-acc-date">${fmtDateShort(d.date)}</span>
+            ${isToday ? '<span class="today-dot" title="Aaj"></span>' : ""}
+          </span>
+          <span class="day-acc-hisab">
+            <span>Total Korcha: <strong>${money(dTotal)}</strong></span>
+            <span>Tor Share: <strong>${money(dShare)}</strong></span>
+          </span>
+          <span class="day-acc-chevron">${open ? "▲" : "▼"}</span>
+        </button>
+        ${
+          open
+            ? `<div class="day-acc-body">
+          ${d.subtitle ? `<span class="day-subtitle">${esc(d.subtitle)}</span>` : ""}
+          ${renderDayContent(d)}
+        </div>`
+            : ""
+        }
+      </div>`;
+    })
+    .join("");
 }
 
 function renderDayContent(day) {
@@ -387,7 +493,6 @@ function renderDayContent(day) {
         <span class="special-badge">Aajker Special</span>
         <div class="special-emoji">${day.special.emoji || "✨"}</div>
         <h4>${esc(day.special.name)}</h4>
-        <p>${esc(day.special.desc || "")}</p>
       </div>`
       : "";
 
@@ -509,7 +614,7 @@ function renderAdminOverview(cfg) {
     <div class="admin-card">
       <h2 class="section-heading">Overview 📊</h2>
       <div class="stats-row">
-        <div class="stat-tile"><span class="stat-label">Total Budget</span><span class="stat-value">${money(cfg.totalBudget)}</span></div>
+        <div class="stat-tile"><span class="stat-label">Menu Budget</span><span class="stat-value">${money(computeMenuTotal())}</span></div>
         <div class="stat-tile"><span class="stat-label">Joma Hoyeche</span><span class="stat-value">${money(totalPaid)}</span></div>
         <div class="stat-tile"><span class="stat-label">Members</span><span class="stat-value">${state.members.length}</span></div>
         <div class="stat-tile"><span class="stat-label">Din</span><span class="stat-value">${state.days.length}</span></div>
@@ -522,7 +627,10 @@ function renderAdminOverview(cfg) {
       ${
         dueMembers.length
           ? `<div class="due-list">${dueMembers
-              .map((m) => `<div class="due-row"><span>${m.avatar} ${esc(m.name)}</span><span class="due-amt">${money(m.due)}</span></div>`)
+              .map(
+                (m) =>
+                  `<div class="due-row"><span><span class="mini-avatar">${avatarSvg(m.avatar)}</span>${esc(m.name)}</span><span class="due-amt">${money(m.due)}</span></div>`
+              )
               .join("")}</div>`
           : emptyState("Sobai clear! Party time 🎉")
       }
@@ -543,13 +651,11 @@ function renderAdminSettings(cfg) {
         <label>Shuru'r Date
           <input type="date" value="${esc(cfg.startDate || "")}" onchange="updateConfigField('startDate', this.value)" />
         </label>
-        <label>Total Budget (₹)
-          <input type="number" value="${cfg.totalBudget}" onchange="updateConfigField('totalBudget', Number(this.value)||0)" />
-        </label>
         <label>Total Lok
           <input type="number" value="${cfg.totalPeople}" onchange="updateConfigField('totalPeople', Number(this.value)||0)" />
         </label>
       </div>
+      <p class="hint">💡 Total Budget ekhon manually dite hoy na — Daily Menu er sob mod-item er (dam × piece) jog kore automatic calculate hoy.</p>
 
       <h3 class="section-heading small">Payment (UPI)</h3>
       <div class="form-grid">
@@ -587,7 +693,7 @@ function renderAdminMembers() {
             const due = Math.max(0, m.share - m.paid);
             return `
           <div class="member-row">
-            <button class="avatar-btn" title="Avatar change koro" onclick="cycleAvatar('${m.id}')">${m.avatar}</button>
+            <button class="avatar-btn" title="Avatar change koro" onclick="cycleAvatar('${m.id}')">${avatarSvg(m.avatar)}</button>
             <input value="${esc(m.name)}" onchange="updateMemberField('${m.id}','name', this.value)" />
             <span class="share-auto" title="Daily menu er dam onujayi auto calculate hoy">${money(m.share)}</span>
             <input type="number" value="${m.paid}" onchange="updateMemberField('${m.id}','paid', Number(this.value)||0)" />
@@ -604,30 +710,42 @@ function renderAdminMembers() {
         <input id="new-member-name" placeholder="Notun member er naam" />
         <button class="btn btn-primary" onclick="addMember()">+ Jog Koro</button>
       </div>
-      <p class="hint">💡 Share ekhon auto-calculate hoy: shob din er mod list er (dam × piece) jog kore, total member number diye vag kore dey. Manually change korte hole daily menu theke price/qty update koro.</p>
+      <p class="hint">💡 Share ekhon auto-calculate hoy: shob din er mod list er (dam × piece) jog kore, total member number diye vag kore dey.</p>
     </div>`;
 }
 
 function renderAdminMenu() {
   const days = state.days;
-  const activeId = ui.adminActiveDayId && days.find((d) => d.id === ui.adminActiveDayId) ? ui.adminActiveDayId : days[0] && days[0].id;
-  const day = days.find((d) => d.id === activeId);
-
+  const divisor = state.members.length || state.config.totalPeople || 1;
   return `
     <div class="admin-menu">
-      <div class="admin-menu-daybar">
-        ${days
-          .map(
-            (d) => `
-          <button class="day-pill ${d.id === activeId ? "active" : ""}" onclick="setAdminDay('${d.id}')">
-            <span class="day-pill-label">${esc(d.label)}</span>
-            <span class="day-pill-date">${fmtDateShort(d.date)}</span>
-          </button>`
-          )
-          .join("")}
-        <button class="day-pill add-day" onclick="addDay()">+ Din Jog Koro</button>
+      <div class="admin-card">
+        <h2 class="section-heading">Daily Menu 🍾</h2>
+        <p class="hint" style="margin-top:-4px;margin-bottom:14px;">Ekta din e click koro — popup e mod/chakna/special sob edit korte parbe.</p>
+        <div class="day-list">
+          ${
+            days
+              .map((d) => {
+                const dTotal = dayMenuTotal(d);
+                const dShare = Math.round(dTotal / divisor);
+                return `
+            <button class="day-list-row" onclick="setAdminDay('${d.id}')">
+              <span class="day-list-main">
+                <span class="day-list-label">${esc(d.label)}</span>
+                <span class="day-list-date">${fmtDateShort(d.date)}</span>
+              </span>
+              <span class="day-list-hisab">
+                <span>Korcha: <strong>${money(dTotal)}</strong></span>
+                <span>Share: <strong>${money(dShare)}</strong></span>
+              </span>
+              <span class="day-list-arrow">›</span>
+            </button>`;
+              })
+              .join("") || emptyState("Kono din nei ekhono.")
+          }
+        </div>
+        <button class="btn btn-primary" onclick="addDay()">+ Notun Din Jog Koro</button>
       </div>
-      ${day ? renderAdminDayEditor(day) : emptyState("Kono din nei. Upore theke ekta din jog koro.")}
     </div>`;
 }
 
@@ -658,9 +776,6 @@ function renderAdminDayEditor(day) {
         <label>Naam
           <input value="${esc(special.name || "")}" onchange="updateSpecialField('${day.id}','name', this.value)" />
         </label>
-        <label class="span-2">Description
-          <input value="${esc(special.desc || "")}" onchange="updateSpecialField('${day.id}','desc', this.value)" />
-        </label>
       </div>
 
       <h3 class="section-heading small">Mod List 🍾</h3>
@@ -689,7 +804,7 @@ function renderAdminDayEditor(day) {
         <button class="btn btn-primary" onclick="addLiquorItem('${day.id}')">+ Jog Koro</button>
       </div>
 
-      <h3 class="section-heading small">Chakna 🍟</h3>
+      <h3 class="section-heading small">Chakna 🍟 <span class="hint-inline">(icon auto/random hoy)</span></h3>
       <div class="chakna-admin-row">
         ${day.chakna
           .map(
@@ -703,8 +818,7 @@ function renderAdminDayEditor(day) {
           .join("") || emptyState("Chakna list ekhono khali.")}
       </div>
       <div class="add-row">
-        <input id="new-chakna-emoji-${day.id}" class="emoji-input" placeholder="🍟" maxlength="4" />
-        <input id="new-chakna-name-${day.id}" placeholder="Chakna naam" />
+        <input id="new-chakna-name-${day.id}" placeholder="Chakna naam (icon auto lagbe)" />
         <button class="btn btn-primary" onclick="addChaknaItem('${day.id}')">+ Jog Koro</button>
       </div>
     </div>`;
@@ -745,8 +859,7 @@ async function markFullyPaid(id) {
 async function cycleAvatar(id) {
   const m = state.members.find((x) => x.id === id);
   if (!m) return;
-  const idx = AVATAR_POOL.indexOf(m.avatar);
-  m.avatar = AVATAR_POOL[(idx + 1) % AVATAR_POOL.length];
+  m.avatar = ((Number(m.avatar) || 0) + 1) % AVATAR_TOTAL;
   await Store.saveMember(m);
   render();
 }
@@ -758,7 +871,7 @@ async function addMember() {
     toast("Naam likho age!");
     return;
   }
-  const avatar = AVATAR_POOL[state.members.length % AVATAR_POOL.length];
+  const avatar = (state.members.length * 9) % AVATAR_TOTAL;
   const m = { id: Store.newId("m"), name, avatar, share: 0, paid: 0 };
   await Store.saveMember(m);
   await recalcShares();
@@ -847,8 +960,7 @@ async function addChaknaItem(dayId) {
     toast("Chakna er naam likho!");
     return;
   }
-  const emoji = (document.getElementById("new-chakna-emoji-" + dayId) || {}).value || "🍽️";
-  d.chakna.push({ name, emoji });
+  d.chakna.push({ name, emoji: randomChaknaIcon() });
   await Store.saveDay(d);
   render();
 }
@@ -869,7 +981,7 @@ async function addDay() {
     date: nextDate,
     label: "Notun Din",
     subtitle: "",
-    special: { name: "", desc: "", emoji: "✨" },
+    special: { name: "", emoji: "✨" },
     liquor: [],
     chakna: [],
   };

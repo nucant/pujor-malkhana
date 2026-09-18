@@ -2,15 +2,12 @@
 // This file is only ever READ to bootstrap a brand new board; after that,
 // the store (localStorage or the shared db) is the source of truth.
 
-const AVATAR_POOL = ["🥴", "🍻", "🥂", "🍺", "😵‍💫", "🍾", "🧉", "🤪", "🙃", "😜", "🍷", "🥃"];
-
 const SEED_DATA = {
   config: {
-    title: "Pujor Malkhana",
-    tagline: "Barir Pujo, 2026",
+    title: "PujoTun",
+    tagline: "Pujo Vibes Loading... 2026",
     startDate: "2026-10-16",
     totalDays: 5,
-    totalBudget: 62000,
     totalPeople: 8,
     upiId: "9733734372@jupiteraxis",
     payeeName: "Swarnadip Chakraborty",
@@ -18,15 +15,16 @@ const SEED_DATA = {
     adminPin: "2026",
   },
 
+  // avatar: numeric index into the generated avatar set (see avatarSvg in app.js)
   members: [
-    { id: "m1", name: "Abir", avatar: "🥴", share: 3000, paid: 3000 },
-    { id: "m2", name: "Sourav", avatar: "🍻", share: 3000, paid: 1500 },
-    { id: "m3", name: "Pritam", avatar: "🥂", share: 3000, paid: 3000 },
-    { id: "m4", name: "Debjit", avatar: "🍺", share: 3000, paid: 0 },
-    { id: "m5", name: "Anwesha", avatar: "🍾", share: 3000, paid: 2000 },
-    { id: "m6", name: "Riya", avatar: "🧉", share: 3000, paid: 3000 },
-    { id: "m7", name: "Sagnik", avatar: "🤪", share: 3000, paid: 1000 },
-    { id: "m8", name: "Ishani", avatar: "🍷", share: 3000, paid: 0 },
+    { id: "m1", name: "Abir", avatar: 0, share: 3000, paid: 3000 },
+    { id: "m2", name: "Sourav", avatar: 9, share: 3000, paid: 1500 },
+    { id: "m3", name: "Pritam", avatar: 18, share: 3000, paid: 3000 },
+    { id: "m4", name: "Debjit", avatar: 27, share: 3000, paid: 0 },
+    { id: "m5", name: "Anwesha", avatar: 36, share: 3000, paid: 2000 },
+    { id: "m6", name: "Riya", avatar: 45, share: 3000, paid: 3000 },
+    { id: "m7", name: "Sagnik", avatar: 54, share: 3000, paid: 1000 },
+    { id: "m8", name: "Ishani", avatar: 63, share: 3000, paid: 0 },
   ],
 
   days: [
@@ -141,5 +139,5 @@ const SEED_DATA = {
 };
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { SEED_DATA, AVATAR_POOL };
+  module.exports = { SEED_DATA };
 }

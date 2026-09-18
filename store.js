@@ -7,7 +7,7 @@
 //              deploy this standalone and want multi-device sync.
 
 const Store = (function () {
-  const LS_KEY = "pujorMalkhana_v1";
+  const LS_KEY = "pujoTun_v1";
   let mode = "local";
   let db = null;
   let onChange = null;

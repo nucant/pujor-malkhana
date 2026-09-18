@@ -1,4 +1,4 @@
-# Pujor Malkhana 🍻
+# PujoTun 🍻
 
 Ekta chotto dashboard, Pujor mod-chakna-budget hisheb rakhar jonno. Netflix-style profile screen diye shuru — je jar profile e click kore dekhbe pujo'r budget, tar share, ki mod thakbe kobe, chakna, r ekta open-amount UPI "Pay Now" button. Admin (PIN diye protected) shob kichu control kore: budget, members, r protyek diner mod/chakna/special item.
 
