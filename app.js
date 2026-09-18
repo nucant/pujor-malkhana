@@ -58,9 +58,22 @@ function avatarSvg(index) {
   return `<svg viewBox="0 0 64 64" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="avatar"><circle cx="32" cy="32" r="32" fill="${bg}"/>${features}${hatMarkup}</svg>`;
 }
 
-const CHAKNA_ICON_POOL = ["🍗", "🍟", "🥟", "🍢", "🧀", "🍖", "🥘", "🍛", "🫓", "🥜", "🦐", "🍬", "🥚", "🍤", "🌽", "🥙"];
-function randomChaknaIcon() {
-  return CHAKNA_ICON_POOL[Math.floor(Math.random() * CHAKNA_ICON_POOL.length)];
+// Generated bottle icon per liquor item — no external image fetch (blocked
+// in the sandboxed artifact anyway); color guessed from the item's name.
+function bottleSvg(name) {
+  const n = String(name || "").toLowerCase();
+  let liquid = "#caa24a"; // whisky/rum default (amber)
+  if (/beer|lager|strong|tuborg|kingfisher|budweiser|corona/.test(n)) liquid = "#e8ab37";
+  else if (/wine|shiraz|merlot|red\b/.test(n)) liquid = "#7a1f3d";
+  else if (/vodka|gin|white/.test(n)) liquid = "#dfe7ee";
+  else if (/rum|monk|bacardi|old monk/.test(n)) liquid = "#8a4a1e";
+  const glass = "#2a3a3d";
+  return `<svg viewBox="0 0 40 64" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="bottle">
+    <rect x="16" y="2" width="8" height="12" rx="2" fill="${glass}"/>
+    <path d="M14 14 h12 l3 8 v34 a3 3 0 0 1 -3 3 h-12 a3 3 0 0 1 -3 -3 v-34 z" fill="${glass}" opacity="0.9"/>
+    <path d="M12 30 h16 v25 a3 3 0 0 1 -3 3 h-10 a3 3 0 0 1 -3 -3 z" fill="${liquid}"/>
+    <rect x="11" y="38" width="18" height="10" rx="1.5" fill="#f7ece4" opacity="0.9"/>
+  </svg>`;
 }
 
 // ---------- small utils ----------
@@ -106,8 +119,14 @@ function defaultDayId() {
   return hit ? hit.id : state.days[0] && state.days[0].id;
 }
 
+function lineTotal(it) {
+  return (Number(it.price) || 0) * (Number(it.qty) || 0);
+}
+
 function dayMenuTotal(day) {
-  return day.liquor.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.qty) || 0), 0);
+  const liquorTotal = day.liquor.reduce((s, it) => s + lineTotal(it), 0);
+  const chaknaTotal = (day.chakna || []).reduce((s, it) => s + lineTotal(it), 0);
+  return liquorTotal + chaknaTotal;
 }
 
 function computeMenuTotal() {
@@ -133,13 +152,13 @@ function emptyState(msg) {
   return '<p class="empty-state">' + esc(msg) + "</p>";
 }
 
-function buildUpiLink(cfg) {
+function buildUpiLink(cfg, scheme) {
   const params = new URLSearchParams();
   params.set("pa", cfg.upiId || "");
   params.set("pn", cfg.payeeName || "");
   if (cfg.payNote) params.set("tn", cfg.payNote);
   params.set("cu", "INR");
-  return "upi://pay?" + params.toString();
+  return (scheme || "upi") + "://pay?" + params.toString();
 }
 
 function toast(msg) {
@@ -368,7 +387,7 @@ function renderUser() {
       <section class="due-hero ${due > 0 ? "pending" : "clear"}">
         <span class="due-hero-label">${due > 0 ? "Tor Baki Ache" : "Status"}</span>
         <span class="due-hero-amount">${due > 0 ? money(due) : "Clear! ✅"}</span>
-        <a class="btn btn-primary btn-big" href="${esc(upiLink)}">💸 ${due > 0 ? "Pay Now Koro" : "Extra Pathate Chao?"}</a>
+        <a class="btn btn-primary btn-big" href="${esc(upiLink)}">💸 ${due > 0 ? "Taka De" : "Extra Taka De"}</a>
       </section>
 
       ${renderStats(cfg, member)}
@@ -402,7 +421,8 @@ function renderStats(cfg, member) {
 }
 
 function renderPayCard(cfg, member) {
-  const upiLink = buildUpiLink(cfg);
+  const upiLink = buildUpiLink(cfg, "upi");
+  const phonepeLink = buildUpiLink(cfg, "phonepe");
   return `
     <div class="pay-card">
       <div class="pay-qr">
@@ -410,14 +430,13 @@ function renderPayCard(cfg, member) {
           <div class="qr-pulse-ring"></div>
           <div id="upi-qr"></div>
         </div>
-        <span>📷 Scan Koro — sob UPI app e kaj kore</span>
+        <span>📷 Scan Koro — sob UPI app e chole</span>
       </div>
       <div class="pay-info">
-        <h3>Pay Now 💸</h3>
-        <p>Amount fix na — joto khushi, tor moner moto pathiye de.</p>
-        <p class="pay-note">⚠️ Niche'r button ta shob phone/UPI app e nao khulte pare (iPhone e especially) — tai <strong>QR scan kora shobcheye safe</strong>.</p>
+        <p class="pay-note">Amount fix na, joto khushi pathiye de. Button shob phone e nao khulte pare — na khulle QR scan koro.</p>
         <div class="pay-actions">
-          <a class="btn btn-ghost" href="${esc(upiLink)}">Ekta UPI App Try Koro</a>
+          <a class="btn btn-ghost" href="${esc(upiLink)}">Pay via UPI</a>
+          <a class="btn btn-ghost" href="${esc(phonepeLink)}">PhonePe te Khulo</a>
           <button class="btn btn-ghost" onclick="copyUpi('${esc(cfg.upiId)}')">Copy UPI ID</button>
         </div>
         <p class="upi-id-text">${esc(cfg.upiId)} · ${esc(cfg.payeeName)}</p>
@@ -468,7 +487,7 @@ function renderDayContent(day) {
       .map(
         (item) => `
       <div class="liquor-card">
-        <div class="liquor-emoji">${item.emoji || "🍶"}</div>
+        <div class="liquor-bottle">${bottleSvg(item.name)}</div>
         <div class="liquor-info">
           <h4>${esc(item.name)}</h4>
           <div class="liquor-meta">
@@ -481,17 +500,19 @@ function renderDayContent(day) {
       )
       .join("") || emptyState("Ajke kono mod list kora hoyni. Bore giye chup kore boshe thako 🙃");
 
-  const chaknaChips =
-    day.chakna
-      .map((c) => `<span class="chakna-chip"><span>${c.emoji || "🍽️"}</span> ${esc(c.name)}</span>`)
+  const chaknaRows =
+    (day.chakna || [])
+      .map(
+        (c) =>
+          `<div class="chakna-row-item"><span>${esc(c.name)}${c.qty ? ` × ${c.qty}` : ""}</span><span>${c.price ? money(lineTotal(c)) : ""}</span></div>`
+      )
       .join("") || emptyState("Chakna decide hoyni ekhono.");
 
   const special =
     day.special && day.special.name
       ? `
       <div class="special-card">
-        <span class="special-badge">Aajker Special</span>
-        <div class="special-emoji">${day.special.emoji || "✨"}</div>
+        <span class="special-badge">✨ Aajker Special</span>
         <h4>${esc(day.special.name)}</h4>
       </div>`
       : "";
@@ -505,7 +526,7 @@ function renderDayContent(day) {
       <aside class="day-side">
         ${special}
         <h3 class="section-heading">Chakna 🍟</h3>
-        <div class="chakna-row">${chaknaChips}</div>
+        <div class="chakna-list">${chaknaRows}</div>
       </aside>
     </div>`;
 }
@@ -770,22 +791,18 @@ function renderAdminDayEditor(day) {
 
       <h3 class="section-heading small">Aajker Special ✨</h3>
       <div class="form-grid">
-        <label class="narrow">Emoji
-          <input class="emoji-input" value="${esc(special.emoji || "")}" maxlength="4" onchange="updateSpecialField('${day.id}','emoji', this.value)" />
-        </label>
         <label>Naam
           <input value="${esc(special.name || "")}" onchange="updateSpecialField('${day.id}','name', this.value)" />
         </label>
       </div>
 
-      <h3 class="section-heading small">Mod List 🍾</h3>
+      <h3 class="section-heading small">Mod List 🍾 <span class="hint-inline">(bottle icon auto hoy)</span></h3>
       <div class="liquor-table">
-        <div class="liquor-row liquor-row-head"><span></span><span>Naam</span><span>Dam (₹)</span><span>ML</span><span>Piece</span><span></span></div>
+        <div class="liquor-row liquor-row-head"><span>Naam</span><span>Dam (₹)</span><span>ML</span><span>Piece</span><span></span></div>
         ${day.liquor
           .map(
             (item) => `
           <div class="liquor-row">
-            <input class="emoji-input" value="${esc(item.emoji || "")}" maxlength="4" onchange="updateLiquorField('${day.id}','${item.id}','emoji', this.value)" />
             <input value="${esc(item.name)}" onchange="updateLiquorField('${day.id}','${item.id}','name', this.value)" />
             <input type="number" value="${item.price}" onchange="updateLiquorField('${day.id}','${item.id}','price', Number(this.value)||0)" />
             <input type="number" value="${item.ml}" onchange="updateLiquorField('${day.id}','${item.id}','ml', Number(this.value)||0)" />
@@ -796,7 +813,6 @@ function renderAdminDayEditor(day) {
           .join("") || emptyState("Ekhono kono mod jog kora hoyni.")}
       </div>
       <div class="add-row liquor-add-row">
-        <input id="new-liquor-emoji-${day.id}" class="emoji-input" placeholder="🍾" maxlength="4" />
         <input id="new-liquor-name-${day.id}" placeholder="Naam" />
         <input id="new-liquor-price-${day.id}" type="number" placeholder="Dam" />
         <input id="new-liquor-ml-${day.id}" type="number" placeholder="ML" />
@@ -804,21 +820,25 @@ function renderAdminDayEditor(day) {
         <button class="btn btn-primary" onclick="addLiquorItem('${day.id}')">+ Jog Koro</button>
       </div>
 
-      <h3 class="section-heading small">Chakna 🍟 <span class="hint-inline">(icon auto/random hoy)</span></h3>
-      <div class="chakna-admin-row">
-        ${day.chakna
+      <h3 class="section-heading small">Chakna 🍟</h3>
+      <div class="liquor-table">
+        <div class="liquor-row liquor-row-head chakna-row-head"><span>Naam</span><span>Dam (₹)</span><span>Koyta</span><span></span></div>
+        ${(day.chakna || [])
           .map(
             (c, i) => `
-          <span class="chakna-chip editable">
-            <input class="emoji-input tiny" value="${esc(c.emoji || "")}" maxlength="4" onchange="updateChaknaField('${day.id}',${i},'emoji', this.value)" />
-            <input class="chakna-name-input" value="${esc(c.name)}" onchange="updateChaknaField('${day.id}',${i},'name', this.value)" />
-            <button class="mini-btn danger tiny" onclick="removeChaknaItem('${day.id}',${i})">✕</button>
-          </span>`
+          <div class="liquor-row chakna-edit-row">
+            <input value="${esc(c.name)}" onchange="updateChaknaField('${day.id}',${i},'name', this.value)" />
+            <input type="number" value="${c.price || 0}" onchange="updateChaknaField('${day.id}',${i},'price', Number(this.value)||0)" />
+            <input type="number" value="${c.qty || 0}" onchange="updateChaknaField('${day.id}',${i},'qty', Number(this.value)||0)" />
+            <button class="mini-btn danger" onclick="removeChaknaItem('${day.id}',${i})">🗑️</button>
+          </div>`
           )
           .join("") || emptyState("Chakna list ekhono khali.")}
       </div>
-      <div class="add-row">
-        <input id="new-chakna-name-${day.id}" placeholder="Chakna naam (icon auto lagbe)" />
+      <div class="add-row chakna-add-row">
+        <input id="new-chakna-name-${day.id}" placeholder="Chakna naam" />
+        <input id="new-chakna-price-${day.id}" type="number" placeholder="Dam" />
+        <input id="new-chakna-qty-${day.id}" type="number" placeholder="Koyta" />
         <button class="btn btn-primary" onclick="addChaknaItem('${day.id}')">+ Jog Koro</button>
       </div>
     </div>`;
@@ -925,11 +945,10 @@ async function addLiquorItem(dayId) {
     toast("Mod er naam likho!");
     return;
   }
-  const emoji = (document.getElementById("new-liquor-emoji-" + dayId) || {}).value || "🍶";
   const price = Number((document.getElementById("new-liquor-price-" + dayId) || {}).value) || 0;
   const ml = Number((document.getElementById("new-liquor-ml-" + dayId) || {}).value) || 0;
   const qty = Number((document.getElementById("new-liquor-qty-" + dayId) || {}).value) || 0;
-  d.liquor.push({ id: Store.newId("l"), name, emoji, price, ml, qty });
+  d.liquor.push({ id: Store.newId("l"), name, price, ml, qty });
   await Store.saveDay(d);
   await recalcShares();
   render();
@@ -940,6 +959,7 @@ async function updateChaknaField(dayId, idx, field, value) {
   if (!d || !d.chakna[idx]) return;
   d.chakna[idx][field] = value;
   await Store.saveDay(d);
+  if (field === "price" || field === "qty") await recalcShares();
   render();
 }
 
@@ -948,6 +968,7 @@ async function removeChaknaItem(dayId, idx) {
   if (!d) return;
   d.chakna.splice(idx, 1);
   await Store.saveDay(d);
+  await recalcShares();
   render();
 }
 
@@ -960,8 +981,11 @@ async function addChaknaItem(dayId) {
     toast("Chakna er naam likho!");
     return;
   }
-  d.chakna.push({ name, emoji: randomChaknaIcon() });
+  const price = Number((document.getElementById("new-chakna-price-" + dayId) || {}).value) || 0;
+  const qty = Number((document.getElementById("new-chakna-qty-" + dayId) || {}).value) || 0;
+  d.chakna.push({ name, price, qty });
   await Store.saveDay(d);
+  await recalcShares();
   render();
 }
 
@@ -981,7 +1005,7 @@ async function addDay() {
     date: nextDate,
     label: "Notun Din",
     subtitle: "",
-    special: { name: "", emoji: "✨" },
+    special: { name: "" },
     liquor: [],
     chakna: [],
   };
