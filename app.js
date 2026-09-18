@@ -216,6 +216,14 @@ function stopDueReminder() {
     _dueReminderTimer = null;
   }
 }
+const NAG_MESSAGES = [
+  "POISHA DEEEE! 😤 {amt} baki, aar koto deri?!",
+  "Oi! {amt} den dikhi, nahole tor naam list e lal hoye thakbe! 🔴",
+  "Abaro bolchi... PAY KOR! {amt} baki ache 💸😡",
+  "Ei je, {amt} — bhule jasni kintu, mone kore dilam! 👀",
+  "Taka de na bhai, {amt} pore ache — dhoirjo shesh hocche! 😤💸",
+];
+
 function startDueReminder() {
   stopDueReminder();
   _dueReminderTimer = setInterval(() => {
@@ -229,9 +237,13 @@ function startDueReminder() {
       return;
     }
     const due = Math.max(0, m.share - m.paid);
-    if (due > 0) toast(`Ei je 👀 ${money(due)} baki ache — Pay Now chap diye de!`);
-    else stopDueReminder();
-  }, 120000);
+    if (due > 0) {
+      const msg = NAG_MESSAGES[Math.floor(Math.random() * NAG_MESSAGES.length)];
+      toast(msg.replace("{amt}", money(due)));
+    } else {
+      stopDueReminder();
+    }
+  }, 60000);
 }
 
 // ---------- render dispatch ----------
