@@ -10,7 +10,7 @@ const SEED_DATA = {
     tagline: "Barir Pujo, 2026",
     startDate: "2026-10-16",
     totalDays: 5,
-    totalBudget: 24000,
+    totalBudget: 62000,
     totalPeople: 8,
     upiId: "9733734372@jupiteraxis",
     payeeName: "Swarnadip Chakraborty",

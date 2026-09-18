@@ -19,6 +19,7 @@ async function boot() {
     state = newState;
     render();
   });
+  await recalcShares();
   render();
 }
 document.addEventListener("DOMContentLoaded", boot);
@@ -64,6 +65,29 @@ function defaultDayId() {
   const t = todayStr();
   const hit = state.days.find((d) => d.date === t);
   return hit ? hit.id : state.days[0] && state.days[0].id;
+}
+
+function computeMenuTotal() {
+  let total = 0;
+  for (const d of state.days) {
+    for (const it of d.liquor) {
+      total += (Number(it.price) || 0) * (Number(it.qty) || 0);
+    }
+  }
+  return total;
+}
+
+async function recalcShares() {
+  const divisor = state.members.length || state.config.totalPeople || 1;
+  const perHead = Math.round(computeMenuTotal() / divisor);
+  const writes = [];
+  for (const m of state.members) {
+    if (m.share !== perHead) {
+      m.share = perHead;
+      writes.push(Store.saveMember(m));
+    }
+  }
+  if (writes.length) await Promise.all(writes);
 }
 
 function emptyState(msg) {
@@ -556,7 +580,7 @@ function renderAdminMembers() {
       <h2 class="section-heading">Members 🧑‍🤝‍🧑</h2>
       <div class="member-table">
         <div class="member-row member-row-head">
-          <span></span><span>Naam</span><span>Share</span><span>Paid</span><span>Baki</span><span></span>
+          <span></span><span>Naam</span><span>Share (Auto)</span><span>Paid</span><span>Baki</span><span></span>
         </div>
         ${state.members
           .map((m) => {
@@ -565,7 +589,7 @@ function renderAdminMembers() {
           <div class="member-row">
             <button class="avatar-btn" title="Avatar change koro" onclick="cycleAvatar('${m.id}')">${m.avatar}</button>
             <input value="${esc(m.name)}" onchange="updateMemberField('${m.id}','name', this.value)" />
-            <input type="number" value="${m.share}" onchange="updateMemberField('${m.id}','share', Number(this.value)||0)" />
+            <span class="share-auto" title="Daily menu er dam onujayi auto calculate hoy">${money(m.share)}</span>
             <input type="number" value="${m.paid}" onchange="updateMemberField('${m.id}','paid', Number(this.value)||0)" />
             <span class="${due > 0 ? "due-amt" : "clear-amt"}">${due > 0 ? money(due) : "Clear"}</span>
             <span class="row-actions">
@@ -580,6 +604,7 @@ function renderAdminMembers() {
         <input id="new-member-name" placeholder="Notun member er naam" />
         <button class="btn btn-primary" onclick="addMember()">+ Jog Koro</button>
       </div>
+      <p class="hint">💡 Share ekhon auto-calculate hoy: shob din er mod list er (dam × piece) jog kore, total member number diye vag kore dey. Manually change korte hole daily menu theke price/qty update koro.</p>
     </div>`;
 }
 
@@ -689,6 +714,7 @@ function renderAdminDayEditor(day) {
 
 async function updateConfigField(field, value) {
   await Store.saveConfig({ [field]: value });
+  if (field === "totalPeople") await recalcShares();
   render();
 }
 
@@ -703,6 +729,7 @@ async function updateMemberField(id, field, value) {
 function removeMember(id) {
   confirmAction("Eke delete korle or hisheb-o muche jabe. Pakka?", async () => {
     await Store.deleteMember(id);
+    await recalcShares();
     render();
   });
 }
@@ -731,10 +758,10 @@ async function addMember() {
     toast("Naam likho age!");
     return;
   }
-  const share = state.config.totalPeople ? Math.round(state.config.totalBudget / state.config.totalPeople) : 0;
   const avatar = AVATAR_POOL[state.members.length % AVATAR_POOL.length];
-  const m = { id: Store.newId("m"), name, avatar, share, paid: 0 };
+  const m = { id: Store.newId("m"), name, avatar, share: 0, paid: 0 };
   await Store.saveMember(m);
+  await recalcShares();
   render();
 }
 
@@ -761,6 +788,7 @@ async function updateLiquorField(dayId, itemId, field, value) {
   if (!it) return;
   it[field] = value;
   await Store.saveDay(d);
+  if (field === "price" || field === "qty") await recalcShares();
   render();
 }
 
@@ -770,6 +798,7 @@ function removeLiquorItem(dayId, itemId) {
     if (!d) return;
     d.liquor = d.liquor.filter((x) => x.id !== itemId);
     await Store.saveDay(d);
+    await recalcShares();
     render();
   });
 }
@@ -789,6 +818,7 @@ async function addLiquorItem(dayId) {
   const qty = Number((document.getElementById("new-liquor-qty-" + dayId) || {}).value) || 0;
   d.liquor.push({ id: Store.newId("l"), name, emoji, price, ml, qty });
   await Store.saveDay(d);
+  await recalcShares();
   render();
 }
 
@@ -852,6 +882,7 @@ function removeDay(dayId) {
   confirmAction("Ei pura din ta — mod, chakna, special shoho — delete hoye jabe. Pakka?", async () => {
     await Store.deleteDay(dayId);
     if (ui.adminActiveDayId === dayId) ui.adminActiveDayId = null;
+    await recalcShares();
     render();
   });
 }
