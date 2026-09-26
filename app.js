@@ -16,9 +16,30 @@ const ui = {
 
 // ---------- boot ----------
 
+function loadingMascotSvg() {
+  const armAngles = [-100, -60, -20, 20, 60, 100];
+  const colors = ["#e2483a", "#e8ab37", "#4f9b6e", "#3aa0c9", "#a05fd1", "#e07b39"];
+  const cx = 60,
+    cy = 62;
+  let arms = "";
+  armAngles.forEach((deg, i) => {
+    const rad = ((deg - 90) * Math.PI) / 180;
+    const x2 = cx + 46 * Math.cos(rad);
+    const y2 = cy + 46 * Math.sin(rad) * 0.75 - 6;
+    arms += `<line x1="${cx}" y1="${cy - 6}" x2="${x2}" y2="${y2}" stroke="#c9a79d" stroke-width="6" stroke-linecap="round"/>`;
+    arms += `<rect x="${x2 - 5}" y="${y2 - 14}" width="10" height="16" rx="2" fill="${colors[i]}"/>`;
+    arms += `<rect x="${x2 - 2}" y="${y2 - 18}" width="4" height="5" rx="1" fill="${colors[i]}"/>`;
+  });
+  return `<svg viewBox="0 0 120 130" width="88" height="94" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="mascot">
+    ${arms}
+    <circle cx="60" cy="34" r="16" fill="#f4cf7a"/>
+    <rect x="42" y="48" width="36" height="46" rx="14" fill="#e2483a"/>
+  </svg>`;
+}
+
 async function boot() {
   const app = document.getElementById("app");
-  if (app) app.innerHTML = `<div class="loading-screen"><div class="loading-emoji">🍻</div><p>Loading...</p></div>`;
+  if (app) app.innerHTML = `<div class="loading-screen"><div class="loading-mascot">${loadingMascotSvg()}</div><p>Loading...</p></div>`;
   state = await Store.init(SEED_DATA, (newState) => {
     state = newState;
     render();
