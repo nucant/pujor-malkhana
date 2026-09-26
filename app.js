@@ -84,6 +84,11 @@ function avatarSvg(index) {
   return `<svg viewBox="0 0 64 64" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="avatar"><circle cx="32" cy="32" r="32" fill="${bg}"/>${features}${hatMarkup}</svg>`;
 }
 
+// A member's own uploaded photo, when they have one, else the generated avatar.
+function memberAvatar(m) {
+  return m && m.photo ? `<img src="${esc(m.photo)}" alt="" />` : avatarSvg(m ? m.avatar : 0);
+}
+
 // Generated bottle icon per liquor item — no external image fetch (blocked
 // in the sandboxed artifact anyway); color guessed from the item's name.
 function bottleSvg(name) {
@@ -582,7 +587,7 @@ function renderProfiles() {
     .map(
       (m) => `
       <button class="profile-tile" onclick="selectMember('${m.id}')">
-        <span class="avatar-ring"><span class="avatar-emoji">${avatarSvg(m.avatar)}</span></span>
+        <span class="avatar-ring"><span class="avatar-emoji">${memberAvatar(m)}</span></span>
         <span class="profile-name">${esc(m.name)}</span>
       </button>`
     )
@@ -594,7 +599,7 @@ function renderProfiles() {
       <div class="glow glow-b"></div>
       <div class="profiles-inner">
         <p class="kicker">${esc(cfg.tagline || "")}</p>
-        <h1 class="profiles-title">Aaj Ke Ke Malkhor? <span>🍻</span></h1>
+        <h1 class="profiles-title bn-mix">Aaj Ke Ke Malkhor? <span class="bn">আজ কে কে মাতাল?</span> <span>🍻</span></h1>
         <p class="profiles-sub">Profile bechhe nao — sob hishab-nikash, mod er list, r "koto baki" ekhane pabi.</p>
         <div class="profiles-grid">
           ${tiles}
@@ -634,42 +639,46 @@ function renderUser() {
           </div>
         </div>
         <div class="user-who">
-          <span class="who-avatar">${avatarSvg(member.avatar)}</span>
+          <span class="who-avatar">${memberAvatar(member)}</span>
           <span class="who-name">${esc(member.name)}</span>
           <button class="btn btn-ghost small logout-btn" onclick="goProfiles()" title="Profile change koro">🚪</button>
         </div>
       </header>
 
-      <div class="date-strip">
-        <span>📅 Aaj: ${fmtDateShort(todayStr())}</span>
-        ${
-          daysLeft == null
-            ? ""
-            : daysLeft > 0
-            ? `<span class="countdown-badge"><span class="cd-icon">⏳</span> <span class="cd-num">${daysLeft}</span> Din Baki Pujo Shuru Hote!</span>`
-            : daysLeft === 0
-            ? `<span class="countdown-badge"><span class="cd-icon">🎉</span> Aaj Pujo Shuru!</span>`
-            : `<span class="countdown-badge"><span class="cd-icon">🎊</span> Pujo Cholche / Sesh!</span>`
-        }
-      </div>
-
-      <section class="due-hero ${due > 0 ? "pending" : "clear"}">
-        <span class="due-hero-label">${due > 0 ? "Tor Baki Ache" : "Status"}</span>
-        <div class="due-hero-row">
-          <span class="due-hero-amount">${due > 0 ? money(due) : "Clear! ✅"}</span>
-          <a class="btn btn-primary btn-big" href="${esc(payLink)}">💸 ${due > 0 ? "Taka De" : "Extra Taka De"}</a>
+      <div class="user-content">
+        <div class="date-strip">
+          <span>📅 Aaj: ${fmtDateShort(todayStr())}</span>
+          ${
+            daysLeft == null
+              ? ""
+              : daysLeft > 0
+              ? `<span class="countdown-badge"><span class="cd-icon">⏳</span> <span class="cd-num">${daysLeft}</span> Din Baki Pujo Shuru Hote!</span>`
+              : daysLeft === 0
+              ? `<span class="countdown-badge"><span class="cd-icon">🎉</span> Aaj Pujo Shuru!</span>`
+              : `<span class="countdown-badge"><span class="cd-icon">🎊</span> Pujo Cholche / Sesh!</span>`
+          }
         </div>
-      </section>
 
-      ${renderStats(cfg, member)}
-      ${renderPayCard(cfg, member)}
+        <div class="dashboard-row">
+          <section class="due-hero ${due > 0 ? "pending" : "clear"}">
+            <span class="due-hero-label">${due > 0 ? "Tor Baki Ache" : "Status"}</span>
+            <div class="due-hero-row">
+              <span class="due-hero-amount">${due > 0 ? money(due) : "Clear! ✅"}</span>
+              <a class="btn btn-primary btn-big" href="${esc(payLink)}">💸 ${due > 0 ? "Taka De" : "Extra Taka De"}</a>
+            </div>
+          </section>
+          ${renderStats(cfg, member)}
+        </div>
 
-      <section class="day-section">
-        <h2 class="section-heading">Prottek Din er Hisab 📅</h2>
-        <div class="day-accordion">${renderDayAccordion(sortedDays(), ui.activeDayId)}</div>
-      </section>
+        ${renderPayCard(cfg, member)}
 
-      <footer class="app-footer">Toiri holo adda diye, mod diye na 😉 · ${esc(cfg.title)}</footer>
+        <section class="day-section">
+          <h2 class="section-heading bn-mix">Prottek Din er Hisab <span class="bn">প্রতিদিনের হিসাব</span> 📅</h2>
+          <div class="day-accordion">${renderDayAccordion(sortedDays(), ui.activeDayId, member.id)}</div>
+        </section>
+
+        <footer class="app-footer">Toiri holo adda diye, mod diye na 😉 · ${esc(cfg.title)}</footer>
+      </div>
     </div>`;
 }
 
@@ -702,18 +711,38 @@ function renderPayCard(cfg, member) {
     </div>`;
 }
 
-function renderDayAccordion(days, activeId) {
+// A member's real cost for one day — sum of their per-item shares, not a
+// flat day-total/member-count divide (items can be assigned to a subset).
+function memberDayShare(day, memberId) {
+  let total = 0;
+  const add = (it) => {
+    const cost = lineTotal(it);
+    if (!cost) return;
+    const assigned = itemMemberIds(it).filter((id) => state.members.some((m) => m.id === id));
+    if (assigned.length && assigned.includes(memberId)) total += cost / assigned.length;
+  };
+  day.liquor.forEach(add);
+  (day.chakna || []).forEach(add);
+  return total;
+}
+
+function memberIsInDay(day, memberId) {
+  const inItem = (it) => itemMemberIds(it).includes(memberId);
+  return day.liquor.some(inItem) || (day.chakna || []).some(inItem);
+}
+
+function renderDayAccordion(days, activeId, memberId) {
   if (!days.length) return emptyState("Kono din set kora nei ekhono. Admin ke bolo.");
-  const divisor = state.members.length || state.config.totalPeople || 1;
   const t = todayStr();
   return days
     .map((d) => {
       const open = d.id === activeId;
       const dTotal = dayMenuTotal(d);
-      const dShare = Math.round(dTotal / divisor);
+      const dShare = Math.round(memberDayShare(d, memberId));
       const isToday = d.date === t;
+      const inThisDay = memberIsInDay(d, memberId);
       return `
-      <div class="day-acc-item ${open ? "open" : ""}">
+      <div class="day-acc-item ${open ? "open" : ""} ${inThisDay ? "" : "not-in"}">
         <button class="day-acc-head" onclick="toggleDay('${d.id}')">
           <span class="day-acc-title">
             <span class="day-acc-label">${esc(d.label)}</span>
@@ -722,7 +751,7 @@ function renderDayAccordion(days, activeId) {
           </span>
           <span class="day-acc-hisab">
             <span>Total Korcha: <strong>${money(dTotal)}</strong></span>
-            <span>Tor Share: <strong>${money(dShare)}</strong></span>
+            <span>Tor Share: <strong>${inThisDay ? money(dShare) : "Nei"}</strong></span>
           </span>
           <span class="day-acc-chevron">${open ? "▲" : "▼"}</span>
         </button>
@@ -730,7 +759,7 @@ function renderDayAccordion(days, activeId) {
           open
             ? `<div class="day-acc-body">
           ${d.subtitle ? `<span class="day-subtitle">${esc(d.subtitle)}</span>` : ""}
-          ${renderDayContent(d)}
+          ${renderDayContent(d, memberId)}
         </div>`
             : ""
         }
@@ -739,9 +768,10 @@ function renderDayAccordion(days, activeId) {
     .join("");
 }
 
-function renderDayContent(day) {
+function renderDayContent(day, memberId) {
+  const myLiquor = day.liquor.filter((it) => itemMemberIds(it).includes(memberId));
   const liquorCards =
-    day.liquor
+    myLiquor
       .map((item) => {
         const names = itemMemberIds(item)
           .map((id) => {
@@ -764,15 +794,16 @@ function renderDayContent(day) {
         <div class="liquor-price">${item.price ? money(item.price) : "Free"}</div>
       </div>`;
       })
-      .join("") || emptyState("Ajke kono mod list kora hoyni. Bore giye chup kore boshe thako 🙃");
+      .join("") || emptyState("Ajke tumi kono mod-e nei. Bore giye chup kore boshe thako 🙃");
 
+  const myChakna = (day.chakna || []).filter((it) => itemMemberIds(it).includes(memberId));
   const chaknaRows =
-    (day.chakna || [])
+    myChakna
       .map(
         (c) =>
           `<div class="chakna-row-item"><span>${esc(c.name)}${c.qty ? ` × ${c.qty}` : ""}</span><span>${c.price ? money(lineTotal(c)) : ""}</span></div>`
       )
-      .join("") || emptyState("Chakna decide hoyni ekhono.");
+      .join("") || emptyState("Ajke tumi kono chakna-e nei.");
 
   const special =
     day.special && day.special.name
@@ -786,12 +817,12 @@ function renderDayContent(day) {
   return `
     <div class="day-content">
       <div class="day-main">
-        <h3 class="section-heading">Ajker Mod List 🍾</h3>
+        <h3 class="section-heading bn-mix">Ajker Mod List <span class="bn">আজকের মদ লিস্ট</span> 🍾</h3>
         <div class="liquor-grid">${liquorCards}</div>
       </div>
       <aside class="day-side">
         ${special}
-        <h3 class="section-heading">Chakna 🍟</h3>
+        <h3 class="section-heading bn-mix">Chakna <span class="bn">চাখনা</span> 🍟</h3>
         <div class="chakna-list">${chaknaRows}</div>
       </aside>
     </div>`;
@@ -935,7 +966,7 @@ function renderAdminOverview(cfg) {
 
   return `
     <div class="admin-card">
-      <h2 class="section-heading">Overview 📊</h2>
+      <h2 class="section-heading bn-mix">Overview <span class="bn">সারসংক্ষেপ</span> 📊</h2>
       <div class="stats-row">
         <div class="stat-tile"><span class="stat-label">Menu Budget</span><span class="stat-value">${money(computeMenuTotal())}</span></div>
         <div class="stat-tile"><span class="stat-label">Joma Hoyeche</span><span class="stat-value">${money(totalPaid)}</span></div>
@@ -952,7 +983,7 @@ function renderAdminOverview(cfg) {
           ? `<div class="due-list">${dueMembers
               .map(
                 (m) =>
-                  `<div class="due-row"><span><span class="mini-avatar">${avatarSvg(m.avatar)}</span>${esc(m.name)}</span><span class="due-amt">${money(m.due)}</span></div>`
+                  `<div class="due-row"><span><span class="mini-avatar">${memberAvatar(m)}</span>${esc(m.name)}</span><span class="due-amt">${money(m.due)}</span></div>`
               )
               .join("")}</div>`
           : emptyState("Sobai clear! Party time 🎉")
@@ -963,7 +994,7 @@ function renderAdminOverview(cfg) {
 function renderAdminSettings(cfg) {
   return `
     <div class="admin-card">
-      <h2 class="section-heading">Pujo Settings ⚙️</h2>
+      <h2 class="section-heading bn-mix">Pujo Settings <span class="bn">পুজো সেটিংস</span> ⚙️</h2>
       <div class="form-grid">
         <label>Pujo'r Naam
           <input value="${esc(cfg.title)}" onchange="updateConfigField('title', this.value)" />
@@ -1018,7 +1049,7 @@ function renderAdminSettings(cfg) {
 function renderAdminMembers() {
   return `
     <div class="admin-card">
-      <h2 class="section-heading">Members 🧑‍🤝‍🧑</h2>
+      <h2 class="section-heading bn-mix">Members <span class="bn">সদস্যরা</span> 🧑‍🤝‍🧑</h2>
       <div class="member-table">
         <div class="member-row member-row-head">
           <span></span><span>Naam</span><span>Share (Auto)</span><span>Paid</span><span>Baki</span><span></span>
@@ -1028,7 +1059,13 @@ function renderAdminMembers() {
             const due = Math.max(0, m.share - m.paid);
             return `
           <div class="member-row">
-            <button class="avatar-btn" title="Avatar change koro" onclick="cycleAvatar('${m.id}')">${avatarSvg(m.avatar)}</button>
+            <span class="avatar-cell">
+              <button class="avatar-btn" title="Avatar cycle koro (photo thakle soriye dey)" onclick="cycleAvatar('${m.id}')">${memberAvatar(m)}</button>
+              <label class="avatar-upload-btn" title="Nijer chobi upload koro">
+                📷
+                <input type="file" accept="image/*" hidden onchange="uploadMemberPhoto('${m.id}', this)" />
+              </label>
+            </span>
             <input value="${esc(m.name)}" onchange="updateMemberField('${m.id}','name', this.value)" />
             <span class="share-auto" title="Daily menu er dam onujayi auto calculate hoy">${money(m.share)}</span>
             <input type="number" value="${m.paid}" onchange="updateMemberField('${m.id}','paid', Number(this.value)||0)" />
@@ -1055,7 +1092,7 @@ function renderAdminMenu() {
   return `
     <div class="admin-menu">
       <div class="admin-card">
-        <h2 class="section-heading">Daily Menu 🍾</h2>
+        <h2 class="section-heading bn-mix">Daily Menu <span class="bn">দৈনিক মেনু</span> 🍾</h2>
         <p class="hint" style="margin-top:-4px;margin-bottom:14px;">Ekta din e click koro — popup e mod/chakna/special sob edit korte parbe.</p>
         <div class="day-list">
           ${
@@ -1219,9 +1256,47 @@ async function markFullyPaid(id) {
 async function cycleAvatar(id) {
   const m = state.members.find((x) => x.id === id);
   if (!m) return;
-  m.avatar = ((Number(m.avatar) || 0) + 1) % AVATAR_TOTAL;
+  if (m.photo) {
+    // first click on a member with an uploaded photo just clears it, so the
+    // same button can get back to the generated avatars
+    m.photo = "";
+  } else {
+    m.avatar = ((Number(m.avatar) || 0) + 1) % AVATAR_TOTAL;
+  }
   await Store.saveMember(m);
   render();
+}
+
+async function uploadMemberPhoto(id, inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  if (file.size > 3 * 1024 * 1024) {
+    toast("Chobi ta 3MB er kom hote hobe.");
+    inputEl.value = "";
+    return;
+  }
+  const m = state.members.find((x) => x.id === id);
+  if (!m) return;
+  toast("Upload hocche...");
+  try {
+    let url = null;
+    if (window.claude) {
+      try {
+        const assets = await window.claude.use("assets");
+        if (assets) url = (await assets.upload(file)).url;
+      } catch (e) {
+        url = null;
+      }
+    }
+    if (!url) url = await fileToDataUrl(file);
+    m.photo = url;
+    await Store.saveMember(m);
+    toast("Chobi save hoye geche! ✅");
+    render();
+  } catch (e) {
+    toast("Upload fail korlo, abar try koro.");
+  }
+  inputEl.value = "";
 }
 
 async function addMember() {
