@@ -30,7 +30,25 @@
 
 * { box-sizing: border-box; }
 html, body { background: var(--bg); color: var(--text); margin: 0; }
-body { font-family: var(--font-body); }
+body {
+  font-family: var(--font-body);
+  background:
+    radial-gradient(ellipse 700px 400px at 15% 0%, rgba(255, 159, 67, 0.07), transparent 60%),
+    radial-gradient(ellipse 600px 400px at 85% 0%, rgba(205, 250, 63, 0.05), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+/* Festive strip — an original string-lights motif (fairy lights are common,
+   secular puja-pandal decor); deliberately no deity/idol imagery. */
+.festive-strip {
+  position: absolute; top: 0; left: 0; right: 0; height: 46px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='46'%3E%3Cpath d='M0 6 Q35 40 70 6 T140 6' stroke='%23ff9f43' stroke-width='1.4' fill='none' opacity='0.55'/%3E%3Ccircle cx='18' cy='20' r='3' fill='%23ffcf6b'/%3E%3Ccircle cx='70' cy='30' r='3' fill='%23ff9f43'/%3E%3Ccircle cx='122' cy='20' r='3' fill='%23ffcf6b'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: top center;
+  opacity: 0.8;
+  pointer-events: none;
+}
 button, input { font-family: inherit; }
 a { color: inherit; }
 h1, h2, h3, h4 { text-wrap: balance; }
@@ -159,7 +177,8 @@ input, select, textarea { font-size: 16px; }
 .countdown-badge .cd-num { font-family: var(--font-display); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--accent); }
 .countdown-badge .cd-icon { display: inline-block; }
 .logout-btn { font-size: 16px; padding: 6px 12px; }
-.stat-tile { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.stat-tile { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 8px; transition: border-color 0.15s ease; }
+.stat-tile:hover { border-color: var(--border); }
 .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); font-weight: 700; }
 .stat-value { font-family: var(--font-display); font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .stat-due .stat-value { color: var(--warning); }
@@ -187,7 +206,8 @@ input, select, textarea { font-size: 16px; }
 .section-heading.small { font-size: 14px; margin-top: 22px; }
 
 .liquor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.liquor-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-md); padding: 14px; display: flex; gap: 12px; align-items: center; }
+.liquor-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-md); padding: 14px; display: flex; gap: 12px; align-items: center; transition: border-color 0.15s ease, transform 0.15s ease; }
+.liquor-card:hover { border-color: var(--border); transform: translateY(-2px); }
 .liquor-bottle { width: 34px; height: 52px; flex-shrink: 0; border-radius: 6px; overflow: hidden; }
 .liquor-bottle img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .liquor-info { flex: 1; min-width: 0; }
@@ -212,7 +232,6 @@ input, select, textarea { font-size: 16px; }
 .day-acc-item { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-md); overflow: hidden; }
 .day-acc-item.open { border-color: var(--accent); }
 .day-acc-item.not-in { opacity: 0.55; }
-.bn { font-family: "Hind Siliguri", var(--font-body); font-weight: 500; opacity: 0.7; font-size: 0.82em; margin-left: 6px; }
 .day-acc-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: none; border: none; color: var(--text); padding: 14px 16px; cursor: pointer; flex-wrap: wrap; text-align: left; }
 .day-acc-title { display: flex; align-items: center; gap: 8px; min-width: 110px; position: relative; }
 .day-acc-label { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
@@ -220,7 +239,8 @@ input, select, textarea { font-size: 16px; }
 .day-acc-hisab { display: flex; gap: 16px; font-size: 12px; color: var(--text-dim); flex-wrap: wrap; }
 .day-acc-hisab strong { color: var(--gold-soft); font-variant-numeric: tabular-nums; }
 .day-acc-chevron { font-size: 11px; color: var(--text-faint); }
-.day-acc-body { padding: 16px 16px 20px; border-top: 1px solid var(--border-soft); }
+.day-acc-body { padding: 16px 16px 20px; border-top: 1px solid var(--border-soft); animation: bodyIn 0.22s ease; }
+@keyframes bodyIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
 /* admin: vertical day list + popup editor */
 .day-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
@@ -369,9 +389,11 @@ input, select, textarea { font-size: 16px; }
 @media (max-width: 480px) {
   .user-topbar { padding: 14px 16px; gap: 10px; }
   .brand h1 { font-size: 17px; }
-  .due-hero { padding: 18px 16px; margin-top: 12px; gap: 6px; }
-  .due-hero-amount { font-size: 34px; }
-  .btn-big { padding: 8px 18px; font-size: 12px; }
+  .due-hero { padding: 12px 14px; margin-top: 10px; gap: 4px; }
+  .due-hero-label { font-size: 10px; }
+  .due-hero-amount { font-size: 24px; }
+  .due-hero-row { gap: 8px; }
+  .btn-big { padding: 6px 14px; font-size: 11px; }
   .stats-row { gap: 8px; padding: 8px 0; }
   .stat-tile { padding: 11px; gap: 3px; }
   .stat-value { font-size: 17px; }

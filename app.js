@@ -636,9 +636,10 @@ function renderProfiles() {
     <div class="profiles-screen">
       <div class="glow glow-a"></div>
       <div class="glow glow-b"></div>
+      <div class="festive-strip"></div>
       <div class="profiles-inner">
         <p class="kicker">${esc(cfg.tagline || "")}</p>
-        <h1 class="profiles-title bn-mix">Aaj Ke Ke Malkhor? <span class="bn">আজ কে কে মাতাল?</span> <span>🍻</span></h1>
+        <h1 class="profiles-title">Aaj Ke Ke Malkhor? <span>🍻</span></h1>
         <p class="profiles-sub">Profile bechhe nao — sob hishab-nikash, mod er list, r "koto baki" ekhane pabi.</p>
         <div class="profiles-grid">
           ${tiles}
@@ -708,7 +709,7 @@ function renderUser() {
         ${renderPayCard(cfg, member)}
 
         <section class="day-section">
-          <h2 class="section-heading bn-mix">Prottek Din er Hisab <span class="bn">প্রতিদিনের হিসাব</span> 📅</h2>
+          <h2 class="section-heading">Prottek Din er Hisab 📅</h2>
           <div class="day-accordion">${renderDayAccordion(sortedDays(), ui.activeDayId, member.id)}</div>
         </section>
 
@@ -850,12 +851,12 @@ function renderDayContent(day, memberId) {
   return `
     <div class="day-content">
       <div class="day-main">
-        <h3 class="section-heading bn-mix">Ajker Mod List <span class="bn">আজকের মদ লিস্ট</span> 🍾</h3>
+        <h3 class="section-heading">Ajker Mod List 🍾</h3>
         <div class="liquor-grid">${liquorCards}</div>
       </div>
       <aside class="day-side">
         ${special}
-        <h3 class="section-heading bn-mix">Chakna <span class="bn">চাখনা</span> 🍟</h3>
+        <h3 class="section-heading">Chakna 🍟</h3>
         <div class="chakna-list">${chaknaRows}</div>
       </aside>
     </div>`;
@@ -936,6 +937,7 @@ function renderAdminGate() {
   return `
     <div class="gate-screen">
       <div class="glow glow-a"></div>
+      <div class="festive-strip"></div>
       <div class="gate-card">
         <div class="gate-emoji">👑</div>
         <h2>Admin Adda</h2>
@@ -999,7 +1001,7 @@ function renderAdminOverview(cfg) {
 
   return `
     <div class="admin-card">
-      <h2 class="section-heading bn-mix">Overview <span class="bn">সারসংক্ষেপ</span> 📊</h2>
+      <h2 class="section-heading">Overview 📊</h2>
       <div class="stats-row">
         <div class="stat-tile"><span class="stat-label">Menu Budget</span><span class="stat-value">${money(computeMenuTotal())}</span></div>
         <div class="stat-tile"><span class="stat-label">Joma Hoyeche</span><span class="stat-value">${money(totalPaid)}</span></div>
@@ -1027,7 +1029,7 @@ function renderAdminOverview(cfg) {
 function renderAdminSettings(cfg) {
   return `
     <div class="admin-card">
-      <h2 class="section-heading bn-mix">Pujo Settings <span class="bn">পুজো সেটিংস</span> ⚙️</h2>
+      <h2 class="section-heading">Pujo Settings ⚙️</h2>
       <div class="form-grid">
         <label>Pujo'r Naam
           <input value="${esc(cfg.title)}" onchange="updateConfigField('title', this.value)" />
@@ -1082,7 +1084,7 @@ function renderAdminSettings(cfg) {
 function renderAdminMembers() {
   return `
     <div class="admin-card">
-      <h2 class="section-heading bn-mix">Members <span class="bn">সদস্যরা</span> 🧑‍🤝‍🧑</h2>
+      <h2 class="section-heading">Members 🧑‍🤝‍🧑</h2>
       <div class="member-table">
         <div class="member-row member-row-head">
           <span></span><span>Naam</span><span>Share (Auto)</span><span>Paid</span><span>Baki</span><span></span>
@@ -1125,7 +1127,7 @@ function renderAdminMenu() {
   return `
     <div class="admin-menu">
       <div class="admin-card">
-        <h2 class="section-heading bn-mix">Daily Menu <span class="bn">দৈনিক মেনু</span> 🍾</h2>
+        <h2 class="section-heading">Daily Menu 🍾</h2>
         <p class="hint" style="margin-top:-4px;margin-bottom:14px;">Ekta din e click koro — popup e mod/chakna/special sob edit korte parbe.</p>
         <div class="day-list">
           ${
