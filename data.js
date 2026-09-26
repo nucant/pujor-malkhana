@@ -33,6 +33,7 @@ const SEED_DATA = {
     payeeName: "Swarnadip Chakraborty",
     payNote: "Pujor Mod Fund 2026",
     adminPin: "2026",
+    nagToneUrl: "", // set from Admin > Settings > Reminder Tone; empty = default synthesized jingle
   },
 
   // avatar: numeric index into the generated avatar set (see avatarSvg in app.js)

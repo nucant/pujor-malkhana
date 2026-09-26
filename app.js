@@ -178,11 +178,13 @@ function computeMenuTotal() {
   return total;
 }
 
-// Which members share the cost of a liquor item. Missing/empty memberIds
-// means "everyone" (so existing items keep working without needing setup).
+// Which members share the cost of an item (liquor or chakna). memberIds
+// being unset (null/undefined — never saved yet) means "everyone". Once
+// explicitly saved, an empty array genuinely means "nobody" — it must NOT
+// fall back to everyone, or deselecting the last person silently undoes it.
 function itemMemberIds(item) {
-  if (item.memberIds && item.memberIds.length) return item.memberIds;
-  return state.members.map((m) => m.id);
+  if (item.memberIds == null) return state.members.map((m) => m.id);
+  return item.memberIds;
 }
 
 async function recalcShares() {
@@ -200,18 +202,43 @@ async function recalcShares() {
         totals[id] += per;
       });
     }
-    const chaknaTotal = (d.chakna || []).reduce((s, it) => s + lineTotal(it), 0);
-    if (chaknaTotal && state.members.length) {
-      const per = chaknaTotal / state.members.length;
-      state.members.forEach((m) => {
-        totals[m.id] += per;
+    for (const it of d.chakna || []) {
+      const cost = lineTotal(it);
+      if (!cost) continue;
+      const assigned = itemMemberIds(it).filter((id) => id in totals);
+      if (!assigned.length) continue;
+      const per = cost / assigned.length;
+      assigned.forEach((id) => {
+        totals[id] += per;
       });
     }
   }
 
+  // Largest-remainder rounding: round each member's share individually but
+  // keep the sum exactly equal to the real total (plain Math.round on each
+  // one independently can drift the sum off by a rupee or two).
+  const ids = state.members.map((m) => m.id);
+  const grandTotal = Math.round(ids.reduce((s, id) => s + (totals[id] || 0), 0));
+  const floors = {};
+  let flooredSum = 0;
+  const remainders = [];
+  ids.forEach((id) => {
+    const exact = totals[id] || 0;
+    const fl = Math.floor(exact);
+    floors[id] = fl;
+    flooredSum += fl;
+    remainders.push({ id, rem: exact - fl });
+  });
+  remainders.sort((a, b) => b.rem - a.rem);
+  let leftover = grandTotal - flooredSum;
+  const finalShares = Object.assign({}, floors);
+  for (let i = 0; i < remainders.length && leftover > 0; i++, leftover--) {
+    finalShares[remainders[i].id] += 1;
+  }
+
   const writes = [];
   for (const m of state.members) {
-    const newShare = Math.round(totals[m.id] || 0);
+    const newShare = finalShares[m.id] || 0;
     if (m.share !== newShare) {
       m.share = newShare;
       writes.push(Store.saveMember(m));
@@ -286,7 +313,7 @@ const NAG_MESSAGES = [
   "Taka de na bhai, {amt} pore ache — dhoirjo shesh hocche! 😤💸",
 ];
 
-function playNagBeep() {
+function playOriginalJingle() {
   // A short original alarm-style jingle (synthesized, no audio file) — not a
   // clip of any song, since we can't embed copyrighted audio as a UI sound.
   try {
@@ -309,6 +336,66 @@ function playNagBeep() {
       o.stop(t + 0.24);
     });
   } catch (e) {}
+}
+
+function playNagBeep() {
+  const url = state && state.config && state.config.nagToneUrl;
+  if (url) {
+    try {
+      const audio = new Audio(url);
+      audio.volume = 0.6;
+      const p = audio.play();
+      if (p && p.catch) p.catch(() => playOriginalJingle());
+      return;
+    } catch (e) {
+      // fall through to the synthesized jingle below
+    }
+  }
+  playOriginalJingle();
+}
+
+async function uploadNagTone(inputEl) {
+  const file = inputEl.files && inputEl.files[0];
+  if (!file) return;
+  if (file.size > 3 * 1024 * 1024) {
+    toast("Audio file ta 3MB er kom hote hobe.");
+    inputEl.value = "";
+    return;
+  }
+  toast("Upload hocche...");
+  try {
+    let url = null;
+    if (window.claude) {
+      try {
+        const assets = await window.claude.use("assets");
+        if (assets) url = (await assets.upload(file)).url;
+      } catch (e) {
+        url = null;
+      }
+    }
+    if (!url) url = await fileToDataUrl(file);
+    await Store.saveConfig({ nagToneUrl: url });
+    toast("Tone save hoye geche! ✅");
+    render();
+  } catch (e) {
+    toast("Upload fail korlo, abar try koro.");
+  }
+  inputEl.value = "";
+}
+
+async function clearNagTone() {
+  await Store.saveConfig({ nagToneUrl: "" });
+  toast("Custom tone soriye disi, ekhon default jingle bajbe.");
+  render();
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function fireDueNag() {
@@ -906,6 +993,18 @@ function renderAdminSettings(cfg) {
         </label>
       </div>
 
+      <h3 class="section-heading small">Reminder Tone 🔔</h3>
+      <div class="form-grid">
+        <label>Custom Tone Upload (audio file)
+          <input type="file" accept="audio/*" onchange="uploadNagTone(this)" />
+        </label>
+      </div>
+      <div class="pay-actions" style="margin-top:8px;">
+        <button class="btn btn-ghost" onclick="playNagBeep()">🔊 Test Sound</button>
+        ${cfg.nagToneUrl ? `<button class="btn btn-ghost" onclick="clearNagTone()">🗑️ Custom Tone Soriye Dao</button>` : ""}
+      </div>
+      <p class="hint">${cfg.nagToneUrl ? "💡 Custom tone active ache — reminder e ei sound-i bajbe." : "💡 Kono custom tone upload na korle, original synthesized jingle bajbe."}</p>
+
       <h3 class="section-heading small">Admin Access</h3>
       <div class="form-grid">
         <label>Admin PIN
@@ -1051,15 +1150,27 @@ function renderAdminDayEditor(day) {
       <div class="liquor-table">
         <div class="liquor-row liquor-row-head chakna-row-head"><span>Naam</span><span>Dam (₹)</span><span>Koyta</span><span></span></div>
         ${(day.chakna || [])
-          .map(
-            (c, i) => `
-          <div class="liquor-row chakna-edit-row">
-            <input value="${esc(c.name)}" onchange="updateChaknaField('${day.id}',${i},'name', this.value)" />
-            <input type="number" value="${c.price || 0}" onchange="updateChaknaField('${day.id}',${i},'price', Number(this.value)||0)" />
-            <input type="number" value="${c.qty || 0}" onchange="updateChaknaField('${day.id}',${i},'qty', Number(this.value)||0)" />
-            <button class="mini-btn danger" onclick="removeChaknaItem('${day.id}',${i})">🗑️</button>
-          </div>`
-          )
+          .map((c, i) => {
+            const assigned = itemMemberIds(c);
+            return `
+          <div class="liquor-item-block">
+            <div class="liquor-row chakna-edit-row">
+              <input value="${esc(c.name)}" onchange="updateChaknaField('${day.id}',${i},'name', this.value)" />
+              <input type="number" value="${c.price || 0}" onchange="updateChaknaField('${day.id}',${i},'price', Number(this.value)||0)" />
+              <input type="number" value="${c.qty || 0}" onchange="updateChaknaField('${day.id}',${i},'qty', Number(this.value)||0)" />
+              <button class="mini-btn danger" onclick="removeChaknaItem('${day.id}',${i})">🗑️</button>
+            </div>
+            <div class="liquor-members-row">
+              <span class="lm-label">Ke ke:</span>
+              ${state.members
+                .map(
+                  (m) =>
+                    `<button class="lm-chip ${assigned.includes(m.id) ? "active" : ""}" onclick="toggleChaknaMember('${day.id}',${i},'${m.id}')">${esc(m.name)}</button>`
+                )
+                .join("")}
+            </div>
+          </div>`;
+          })
           .join("") || emptyState("Chakna list ekhono khali.")}
       </div>
       <div class="add-row chakna-add-row">
@@ -1125,6 +1236,24 @@ async function addMember() {
   await Store.saveMember(m);
   await recalcShares();
   render();
+  confirmAction(`${name} ke ki shob existing mod/chakna item-e o add kore dibo?`, async () => {
+    for (const d of state.days) {
+      let changed = false;
+      const addTo = (it) => {
+        const ids = itemMemberIds(it).slice();
+        if (!ids.includes(m.id)) {
+          ids.push(m.id);
+          it.memberIds = ids;
+          changed = true;
+        }
+      };
+      d.liquor.forEach(addTo);
+      (d.chakna || []).forEach(addTo);
+      if (changed) await Store.saveDay(d);
+    }
+    await recalcShares();
+    render();
+  });
 }
 
 async function updateDayField(dayId, field, value) {
@@ -1203,6 +1332,21 @@ async function toggleItemMember(dayId, itemId, memberId) {
   render();
 }
 
+async function toggleChaknaMember(dayId, idx, memberId) {
+  const d = state.days.find((x) => x.id === dayId);
+  if (!d || !d.chakna[idx]) return;
+  const c = d.chakna[idx];
+  const current = itemMemberIds(c).slice();
+  const i = current.indexOf(memberId);
+  if (i === -1) current.push(memberId);
+  else current.splice(i, 1);
+  c.memberIds = current;
+  await Store.saveDay(d);
+  await recalcShares();
+  toast("Save hoye geche! ✅");
+  render();
+}
+
 async function updateChaknaField(dayId, idx, field, value) {
   const d = state.days.find((x) => x.id === dayId);
   if (!d || !d.chakna[idx]) return;
@@ -1233,7 +1377,8 @@ async function addChaknaItem(dayId) {
   }
   const price = Number((document.getElementById("new-chakna-price-" + dayId) || {}).value) || 0;
   const qty = Number((document.getElementById("new-chakna-qty-" + dayId) || {}).value) || 0;
-  d.chakna.push({ name, price, qty });
+  const memberIds = state.members.map((m) => m.id);
+  d.chakna.push({ name, price, qty, memberIds });
   await Store.saveDay(d);
   await recalcShares();
   render();
