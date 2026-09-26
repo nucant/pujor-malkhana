@@ -192,6 +192,7 @@ input, select, textarea { font-size: 16px; }
 .liquor-info { flex: 1; min-width: 0; }
 .liquor-info h4 { margin: 0 0 4px; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .liquor-meta { display: flex; gap: 8px; font-size: 11px; color: var(--text-faint); }
+.liquor-who { font-size: 11px; color: var(--gold-soft); margin-top: 2px; }
 .liquor-price { font-family: var(--font-display); font-weight: 700; color: var(--gold-soft); font-size: 14px; white-space: nowrap; }
 
 .day-side { display: flex; flex-direction: column; gap: 4px; }
@@ -312,7 +313,13 @@ input, select, textarea { font-size: 16px; }
 
 .day-editor-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
 
-.liquor-table { display: flex; flex-direction: column; gap: 8px; overflow-x: auto; margin-bottom: 6px; }
+.liquor-table { display: flex; flex-direction: column; gap: 10px; overflow-x: auto; margin-bottom: 6px; }
+.liquor-item-block { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border-soft); }
+.liquor-item-block:last-child { border-bottom: none; }
+.liquor-members-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lm-label { font-size: 11px; color: var(--text-faint); }
+.lm-chip { background: var(--surface-2); border: 1px solid var(--border); color: var(--text-faint); font-size: 12px; padding: 4px 10px; border-radius: 999px; cursor: pointer; }
+.lm-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .liquor-row { display: grid; grid-template-columns: 1.6fr 0.8fr 0.6fr 0.6fr 40px; gap: 8px; align-items: center; min-width: 420px; }
 .liquor-row.chakna-edit-row { grid-template-columns: 1.6fr 0.8fr 0.6fr 40px; min-width: 320px; }
 .liquor-row-head { font-size: 11px; text-transform: uppercase; color: var(--text-faint); }

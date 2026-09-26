@@ -178,13 +178,42 @@ function computeMenuTotal() {
   return total;
 }
 
+// Which members share the cost of a liquor item. Missing/empty memberIds
+// means "everyone" (so existing items keep working without needing setup).
+function itemMemberIds(item) {
+  if (item.memberIds && item.memberIds.length) return item.memberIds;
+  return state.members.map((m) => m.id);
+}
+
 async function recalcShares() {
-  const divisor = state.members.length || state.config.totalPeople || 1;
-  const perHead = Math.round(computeMenuTotal() / divisor);
+  const totals = {};
+  for (const m of state.members) totals[m.id] = 0;
+
+  for (const d of state.days) {
+    for (const it of d.liquor) {
+      const cost = lineTotal(it);
+      if (!cost) continue;
+      const assigned = itemMemberIds(it).filter((id) => id in totals);
+      if (!assigned.length) continue;
+      const per = cost / assigned.length;
+      assigned.forEach((id) => {
+        totals[id] += per;
+      });
+    }
+    const chaknaTotal = (d.chakna || []).reduce((s, it) => s + lineTotal(it), 0);
+    if (chaknaTotal && state.members.length) {
+      const per = chaknaTotal / state.members.length;
+      state.members.forEach((m) => {
+        totals[m.id] += per;
+      });
+    }
+  }
+
   const writes = [];
   for (const m of state.members) {
-    if (m.share !== perHead) {
-      m.share = perHead;
+    const newShare = Math.round(totals[m.id] || 0);
+    if (m.share !== newShare) {
+      m.share = newShare;
       writes.push(Store.saveMember(m));
     }
   }
@@ -626,8 +655,15 @@ function renderDayAccordion(days, activeId) {
 function renderDayContent(day) {
   const liquorCards =
     day.liquor
-      .map(
-        (item) => `
+      .map((item) => {
+        const names = itemMemberIds(item)
+          .map((id) => {
+            const m = state.members.find((x) => x.id === id);
+            return m ? m.name : null;
+          })
+          .filter(Boolean);
+        const allIn = names.length === state.members.length;
+        return `
       <div class="liquor-card">
         <div class="liquor-bottle">${bottleSvg(item.name)}</div>
         <div class="liquor-info">
@@ -636,10 +672,11 @@ function renderDayContent(day) {
             ${item.ml ? `<span>${item.ml} ml</span>` : ""}
             ${item.qty != null ? `<span>${item.qty} piece</span>` : ""}
           </div>
+          ${!allIn ? `<div class="liquor-who">${esc(names.join(", ") || "Keu na")}</div>` : ""}
         </div>
         <div class="liquor-price">${item.price ? money(item.price) : "Free"}</div>
-      </div>`
-      )
+      </div>`;
+      })
       .join("") || emptyState("Ajke kono mod list kora hoyni. Bore giye chup kore boshe thako 🙃");
 
   const chaknaRows =
@@ -978,16 +1015,28 @@ function renderAdminDayEditor(day) {
       <div class="liquor-table">
         <div class="liquor-row liquor-row-head"><span>Naam</span><span>Dam (₹)</span><span>ML</span><span>Piece</span><span></span></div>
         ${day.liquor
-          .map(
-            (item) => `
-          <div class="liquor-row">
-            <input value="${esc(item.name)}" onchange="updateLiquorField('${day.id}','${item.id}','name', this.value)" />
-            <input type="number" value="${item.price}" onchange="updateLiquorField('${day.id}','${item.id}','price', Number(this.value)||0)" />
-            <input type="number" value="${item.ml}" onchange="updateLiquorField('${day.id}','${item.id}','ml', Number(this.value)||0)" />
-            <input type="number" value="${item.qty}" onchange="updateLiquorField('${day.id}','${item.id}','qty', Number(this.value)||0)" />
-            <button class="mini-btn danger" onclick="removeLiquorItem('${day.id}','${item.id}')">🗑️</button>
-          </div>`
-          )
+          .map((item) => {
+            const assigned = itemMemberIds(item);
+            return `
+          <div class="liquor-item-block">
+            <div class="liquor-row">
+              <input value="${esc(item.name)}" onchange="updateLiquorField('${day.id}','${item.id}','name', this.value)" />
+              <input type="number" value="${item.price}" onchange="updateLiquorField('${day.id}','${item.id}','price', Number(this.value)||0)" />
+              <input type="number" value="${item.ml}" onchange="updateLiquorField('${day.id}','${item.id}','ml', Number(this.value)||0)" />
+              <input type="number" value="${item.qty}" onchange="updateLiquorField('${day.id}','${item.id}','qty', Number(this.value)||0)" />
+              <button class="mini-btn danger" onclick="removeLiquorItem('${day.id}','${item.id}')">🗑️</button>
+            </div>
+            <div class="liquor-members-row">
+              <span class="lm-label">Ke ke:</span>
+              ${state.members
+                .map(
+                  (m) =>
+                    `<button class="lm-chip ${assigned.includes(m.id) ? "active" : ""}" onclick="toggleItemMember('${day.id}','${item.id}','${m.id}')">${esc(m.name)}</button>`
+                )
+                .join("")}
+            </div>
+          </div>`;
+          })
           .join("") || emptyState("Ekhono kono mod jog kora hoyni.")}
       </div>
       <div class="add-row liquor-add-row">
@@ -1131,9 +1180,26 @@ async function addLiquorItem(dayId) {
   const price = Number((document.getElementById("new-liquor-price-" + dayId) || {}).value) || 0;
   const ml = Number((document.getElementById("new-liquor-ml-" + dayId) || {}).value) || 0;
   const qty = Number((document.getElementById("new-liquor-qty-" + dayId) || {}).value) || 0;
-  d.liquor.push({ id: Store.newId("l"), name, price, ml, qty });
+  const memberIds = state.members.map((m) => m.id);
+  d.liquor.push({ id: Store.newId("l"), name, price, ml, qty, memberIds });
   await Store.saveDay(d);
   await recalcShares();
+  render();
+}
+
+async function toggleItemMember(dayId, itemId, memberId) {
+  const d = state.days.find((x) => x.id === dayId);
+  if (!d) return;
+  const it = d.liquor.find((x) => x.id === itemId);
+  if (!it) return;
+  const current = itemMemberIds(it).slice();
+  const idx = current.indexOf(memberId);
+  if (idx === -1) current.push(memberId);
+  else current.splice(idx, 1);
+  it.memberIds = current;
+  await Store.saveDay(d);
+  await recalcShares();
+  toast("Save hoye geche! ✅");
   render();
 }
 
