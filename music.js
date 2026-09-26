@@ -4,17 +4,22 @@
 // no arbitrary iframes) — so this file is intentionally not loaded by
 // artifact.html.
 //
-// Tries to autoplay unmuted at low volume by default. Most desktop
-// browsers allow this; some mobile/strict browsers still block any
-// unmuted autoplay with zero interaction — the 🎵 button is the manual
-// fallback/mute toggle for those cases, not the primary way to start it.
+// The video id is set from Admin > Settings > Background Music (via
+// window.setBackgroundMusicVideo, called once app.js loads the config) —
+// this file no longer hardcodes a track. Tries to autoplay unmuted at low
+// volume; most desktop browsers allow this, some mobile/strict browsers
+// still block any unmuted autoplay with zero interaction — the 🎵 button
+// is the manual fallback/mute toggle for those cases.
 
 (function () {
-  var VIDEO_ID = "xdLFc3oAhOM";
   var VOLUME = 26; // "halka kore" — kept low
+  var DEFAULT_VIDEO_ID = "xdLFc3oAhOM";
 
   var player = null;
   var seeked = false;
+  var ytReady = false;
+  var pendingVideoId = null;
+  var currentVideoId = null;
 
   function setBtn() {
     var btn = document.getElementById("music-toggle");
@@ -25,33 +30,50 @@
 
   function randomStart(duration) {
     if (!duration || duration < 20) return 0;
-    // pick somewhere in the middle 60% of the track, never past the last 20s
     var lo = Math.min(duration * 0.15, 45);
     var hi = Math.max(lo + 5, duration * 0.75);
     return lo + Math.random() * (hi - lo);
   }
 
+  function createOrSwap(videoId) {
+    if (!videoId || videoId === currentVideoId) return;
+    currentVideoId = videoId;
+    seeked = false;
+    if (!player) {
+      player = new YT.Player("yt-bg-player", {
+        height: "0",
+        width: "0",
+        videoId: videoId,
+        playerVars: { autoplay: 1, mute: 0, controls: 0, loop: 1, playlist: videoId },
+        events: {
+          onReady: function (e) {
+            e.target.setVolume(VOLUME);
+            e.target.playVideo();
+            setBtn();
+          },
+          onStateChange: function (e) {
+            if (e.data === YT.PlayerState.PLAYING && !seeked) {
+              seeked = true;
+              e.target.seekTo(randomStart(e.target.getDuration()), true);
+            }
+            setBtn();
+          },
+        },
+      });
+    } else {
+      player.loadVideoById(videoId);
+      player.setVolume(VOLUME);
+    }
+  }
+
   window.onYouTubeIframeAPIReady = function () {
-    player = new YT.Player("yt-bg-player", {
-      height: "0",
-      width: "0",
-      videoId: VIDEO_ID,
-      playerVars: { autoplay: 1, mute: 0, controls: 0, loop: 1, playlist: VIDEO_ID },
-      events: {
-        onReady: function (e) {
-          e.target.setVolume(VOLUME);
-          e.target.playVideo();
-          setBtn();
-        },
-        onStateChange: function (e) {
-          if (e.data === YT.PlayerState.PLAYING && !seeked) {
-            seeked = true;
-            e.target.seekTo(randomStart(e.target.getDuration()), true);
-          }
-          setBtn();
-        },
-      },
-    });
+    ytReady = true;
+    createOrSwap(pendingVideoId || DEFAULT_VIDEO_ID);
+  };
+
+  window.setBackgroundMusicVideo = function (videoId) {
+    pendingVideoId = videoId || DEFAULT_VIDEO_ID;
+    if (ytReady) createOrSwap(pendingVideoId);
   };
 
   window.toggleMusic = function () {

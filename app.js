@@ -49,6 +49,7 @@ async function boot() {
   });
   await recalcShares();
   render();
+  if (window.setBackgroundMusicVideo) window.setBackgroundMusicVideo(state.config.musicVideoId || "");
 }
 document.addEventListener("DOMContentLoaded", boot);
 
@@ -441,6 +442,43 @@ function startDueReminder() {
   }, 15000);
 }
 
+// ---------- live countdown ----------
+
+function countdownHtml(cfg) {
+  const target = new Date((cfg.startDate || "") + "T00:00:00");
+  if (isNaN(target)) return "";
+  const diff = target.getTime() - Date.now();
+  if (diff <= 0) return `<span class="cd-icon">🎉</span> Pujo Shuru Hoye Geche!`;
+  const totalSec = Math.floor(diff / 1000);
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `<span class="cd-icon">⏳</span> <span class="cd-num">${d}d ${pad(h)}:${pad(m)}:${pad(s)}</span> Baki Pujo Shuru Hote!`;
+}
+
+let _countdownTimer = null;
+function stopCountdownTicker() {
+  if (_countdownTimer) {
+    clearInterval(_countdownTimer);
+    _countdownTimer = null;
+  }
+}
+function startCountdownTicker() {
+  stopCountdownTicker();
+  const tick = () => {
+    const el = document.getElementById("countdown-live");
+    if (!el || ui.screen !== "user") {
+      stopCountdownTicker();
+      return;
+    }
+    el.innerHTML = countdownHtml(state.config);
+  };
+  tick();
+  _countdownTimer = setInterval(tick, 1000);
+}
+
 // ---------- render dispatch ----------
 
 function render() {
@@ -473,9 +511,11 @@ function selectMember(id) {
   ui.activeDayId = null;
   render();
   startDueReminder();
+  startCountdownTicker();
 }
 function goProfiles() {
   stopDueReminder();
+  stopCountdownTicker();
   ui.screen = "profiles";
   render();
 }
@@ -649,13 +689,9 @@ function renderUser() {
         <div class="date-strip">
           <span>📅 Aaj: ${fmtDateShort(todayStr())}</span>
           ${
-            daysLeft == null
-              ? ""
-              : daysLeft > 0
-              ? `<span class="countdown-badge"><span class="cd-icon">⏳</span> <span class="cd-num">${daysLeft}</span> Din Baki Pujo Shuru Hote!</span>`
-              : daysLeft === 0
-              ? `<span class="countdown-badge"><span class="cd-icon">🎉</span> Aaj Pujo Shuru!</span>`
-              : `<span class="countdown-badge"><span class="cd-icon">🎊</span> Pujo Cholche / Sesh!</span>`
+            daysLeft != null && daysLeft < 0
+              ? `<span class="countdown-badge"><span class="cd-icon">🎊</span> Pujo Cholche / Sesh!</span>`
+              : `<span class="countdown-badge" id="countdown-live">${countdownHtml(cfg)}</span>`
           }
         </div>
 
@@ -732,17 +768,16 @@ function memberIsInDay(day, memberId) {
 }
 
 function renderDayAccordion(days, activeId, memberId) {
-  if (!days.length) return emptyState("Kono din set kora nei ekhono. Admin ke bolo.");
+  const myDays = days.filter((d) => memberIsInDay(d, memberId));
+  if (!myDays.length) return emptyState("Ei pujo-te tumi kono din-er item-e assign nei ekhono. Admin ke bolo.");
   const t = todayStr();
-  return days
+  return myDays
     .map((d) => {
       const open = d.id === activeId;
-      const dTotal = dayMenuTotal(d);
       const dShare = Math.round(memberDayShare(d, memberId));
       const isToday = d.date === t;
-      const inThisDay = memberIsInDay(d, memberId);
       return `
-      <div class="day-acc-item ${open ? "open" : ""} ${inThisDay ? "" : "not-in"}">
+      <div class="day-acc-item ${open ? "open" : ""}">
         <button class="day-acc-head" onclick="toggleDay('${d.id}')">
           <span class="day-acc-title">
             <span class="day-acc-label">${esc(d.label)}</span>
@@ -750,8 +785,7 @@ function renderDayAccordion(days, activeId, memberId) {
             ${isToday ? '<span class="today-dot" title="Aaj"></span>' : ""}
           </span>
           <span class="day-acc-hisab">
-            <span>Total Korcha: <strong>${money(dTotal)}</strong></span>
-            <span>Tor Share: <strong>${inThisDay ? money(dShare) : "Nei"}</strong></span>
+            <span>Tor Korcha: <strong>${money(dShare)}</strong></span>
           </span>
           <span class="day-acc-chevron">${open ? "▲" : "▼"}</span>
         </button>
@@ -1036,6 +1070,14 @@ function renderAdminSettings(cfg) {
       </div>
       <p class="hint">${cfg.nagToneUrl ? "💡 Custom tone active ache — reminder e ei sound-i bajbe." : "💡 Kono custom tone upload na korle, original synthesized jingle bajbe."}</p>
 
+      <h3 class="section-heading small">Background Music 🎵</h3>
+      <div class="form-grid">
+        <label class="span-2">YouTube Video ID ba Link
+          <input value="${esc(cfg.musicVideoId || "")}" placeholder="jemon: xdLFc3oAhOM ba full YouTube link" onchange="updateMusicVideo(this.value)" />
+        </label>
+      </div>
+      <p class="hint">💡 Eta shudhu GitHub Pages (static site) e kaj kore — live Artifact link e YouTube embed platform-level e blocked. Full link paste korleo cholbe, ID ta nijei ber kore nebe.</p>
+
       <h3 class="section-heading small">Admin Access</h3>
       <div class="form-grid">
         <label>Admin PIN
@@ -1225,6 +1267,22 @@ async function updateConfigField(field, value) {
   await Store.saveConfig({ [field]: value });
   if (field === "totalPeople") await recalcShares();
   toast("Save hoye geche! ✅");
+  render();
+}
+
+function extractYoutubeId(input) {
+  const s = String(input || "").trim();
+  if (!s) return "";
+  if (/^[\w-]{11}$/.test(s)) return s;
+  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);
+  return m ? m[1] : s;
+}
+
+async function updateMusicVideo(value) {
+  const id = extractYoutubeId(value);
+  await Store.saveConfig({ musicVideoId: id });
+  toast("Save hoye geche! ✅");
+  if (window.setBackgroundMusicVideo) window.setBackgroundMusicVideo(id);
   render();
 }
 
