@@ -49,7 +49,6 @@ async function boot() {
   });
   await recalcShares();
   render();
-  if (window.setBackgroundMusicVideo) window.setBackgroundMusicVideo(state.config.musicVideoId || "");
 }
 document.addEventListener("DOMContentLoaded", boot);
 
@@ -1070,14 +1069,6 @@ function renderAdminSettings(cfg) {
       </div>
       <p class="hint">${cfg.nagToneUrl ? "💡 Custom tone active ache — reminder e ei sound-i bajbe." : "💡 Kono custom tone upload na korle, original synthesized jingle bajbe."}</p>
 
-      <h3 class="section-heading small">Background Music 🎵</h3>
-      <div class="form-grid">
-        <label class="span-2">YouTube Video ID ba Link
-          <input value="${esc(cfg.musicVideoId || "")}" placeholder="jemon: xdLFc3oAhOM ba full YouTube link" onchange="updateMusicVideo(this.value)" />
-        </label>
-      </div>
-      <p class="hint">💡 Eta shudhu GitHub Pages (static site) e kaj kore — live Artifact link e YouTube embed platform-level e blocked. Full link paste korleo cholbe, ID ta nijei ber kore nebe.</p>
-
       <h3 class="section-heading small">Admin Access</h3>
       <div class="form-grid">
         <label>Admin PIN
@@ -1267,22 +1258,6 @@ async function updateConfigField(field, value) {
   await Store.saveConfig({ [field]: value });
   if (field === "totalPeople") await recalcShares();
   toast("Save hoye geche! ✅");
-  render();
-}
-
-function extractYoutubeId(input) {
-  const s = String(input || "").trim();
-  if (!s) return "";
-  if (/^[\w-]{11}$/.test(s)) return s;
-  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);
-  return m ? m[1] : s;
-}
-
-async function updateMusicVideo(value) {
-  const id = extractYoutubeId(value);
-  await Store.saveConfig({ musicVideoId: id });
-  toast("Save hoye geche! ✅");
-  if (window.setBackgroundMusicVideo) window.setBackgroundMusicVideo(id);
   render();
 }
 
