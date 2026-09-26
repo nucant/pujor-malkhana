@@ -12,6 +12,9 @@ const ui = {
   adminActiveDayId: null,
   dayModalOpenId: null,
   qrModalOpen: false,
+  nagModalOpen: false,
+  nagModalMsg: "",
+  nagModalDue: 0,
 };
 
 // ---------- boot ----------
@@ -255,22 +258,27 @@ const NAG_MESSAGES = [
 ];
 
 function playNagBeep() {
+  // A short original alarm-style jingle (synthesized, no audio file) — not a
+  // clip of any song, since we can't embed copyrighted audio as a UI sound.
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.setValueAtTime(880, ctx.currentTime);
-    o.frequency.setValueAtTime(660, ctx.currentTime + 0.12);
-    o.frequency.setValueAtTime(880, ctx.currentTime + 0.24);
-    g.gain.setValueAtTime(0.18, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-    o.connect(g);
-    g.connect(ctx.destination);
-    o.start();
-    o.stop(ctx.currentTime + 0.45);
+    const notes = [523.25, 659.25, 783.99, 987.77]; // C5 E5 G5 B5 — original ascending jingle
+    notes.forEach((freq, i) => {
+      const t = ctx.currentTime + i * 0.11;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "triangle";
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(0.2, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start(t);
+      o.stop(t + 0.24);
+    });
   } catch (e) {}
 }
 
@@ -286,12 +294,21 @@ function fireDueNag() {
   }
   const due = Math.max(0, m.share - m.paid);
   if (due > 0) {
-    const msg = NAG_MESSAGES[Math.floor(Math.random() * NAG_MESSAGES.length)];
-    toast(msg.replace("{amt}", money(due)));
+    const msg = NAG_MESSAGES[Math.floor(Math.random() * NAG_MESSAGES.length)].replace("{amt}", money(due));
+    ui.nagModalMsg = msg;
+    ui.nagModalDue = due;
+    ui.nagModalOpen = true;
+    render();
     playNagBeep();
   } else {
     stopDueReminder();
   }
+}
+
+function closeNagModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  ui.nagModalOpen = false;
+  render();
 }
 
 function startDueReminder() {
@@ -390,17 +407,34 @@ function renderModals() {
   }
 
   const day = ui.dayModalOpenId && state.days.find((d) => d.id === ui.dayModalOpenId);
-  if (!day) {
-    root.innerHTML = "";
+  if (day) {
+    root.innerHTML = `
+      <div class="modal-overlay" onclick="closeDayEditorModal(event)">
+        <div class="modal-box" onclick="event.stopPropagation()">
+          <button class="modal-close" onclick="closeDayEditorModal()">✕</button>
+          ${renderAdminDayEditor(day)}
+        </div>
+      </div>`;
     return;
   }
-  root.innerHTML = `
-    <div class="modal-overlay" onclick="closeDayEditorModal(event)">
-      <div class="modal-box" onclick="event.stopPropagation()">
-        <button class="modal-close" onclick="closeDayEditorModal()">✕</button>
-        ${renderAdminDayEditor(day)}
-      </div>
-    </div>`;
+
+  if (ui.nagModalOpen) {
+    const payLink = buildUpiLink(state.config, "phonepe");
+    root.innerHTML = `
+      <div class="modal-overlay" onclick="closeNagModal(event)">
+        <div class="modal-box nag-modal-box" onclick="event.stopPropagation()">
+          <button class="modal-close" onclick="closeNagModal()">✕</button>
+          <div class="nag-modal-inner">
+            <div class="nag-modal-emoji">😤💸</div>
+            <p class="nag-modal-msg">${esc(ui.nagModalMsg)}</p>
+            <a class="btn btn-primary btn-big" href="${esc(payLink)}" onclick="closeNagModal()">💸 Ekhoni Pay Koro</a>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  root.innerHTML = "";
 }
 function toggleDay(id) {
   ui.activeDayId = ui.activeDayId === id ? null : id;
@@ -496,10 +530,10 @@ function renderUser() {
           daysLeft == null
             ? ""
             : daysLeft > 0
-            ? `<span class="countdown-badge">⏳ ${daysLeft} Din Baki Pujo Shuru Hote!</span>`
+            ? `<span class="countdown-badge"><span class="cd-icon">⏳</span> <span class="cd-num">${daysLeft}</span> Din Baki Pujo Shuru Hote!</span>`
             : daysLeft === 0
-            ? `<span class="countdown-badge">🎉 Aaj Pujo Shuru!</span>`
-            : `<span class="countdown-badge">🎊 Pujo Cholche / Sesh!</span>`
+            ? `<span class="countdown-badge"><span class="cd-icon">🎉</span> Aaj Pujo Shuru!</span>`
+            : `<span class="countdown-badge"><span class="cd-icon">🎊</span> Pujo Cholche / Sesh!</span>`
         }
       </div>
 
