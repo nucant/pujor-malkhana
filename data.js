@@ -19,7 +19,7 @@ function bpLiquor(id) {
 // Bump this whenever the shape/content below changes — the local (GitHub
 // Pages) storage layer resets itself to the fresh seed when this differs
 // from what a visitor's browser already has saved, so edits actually show up.
-const SEED_VERSION = 4;
+const SEED_VERSION = 5;
 
 const SEED_DATA = {
   seedVersion: SEED_VERSION,
@@ -27,7 +27,7 @@ const SEED_DATA = {
     title: "PujoTun",
     tagline: "Pujo Vibes Loading... 2026",
     startDate: "2026-10-16",
-    totalDays: 5,
+    totalDays: 6,
     totalPeople: 5,
     upiId: "9733734372@jupiteraxis",
     payeeName: "Swarnadip Chakraborty",
@@ -61,6 +61,15 @@ const SEED_DATA = {
       subtitle: "Nabapatrika Snan",
       special: { name: "Kolapata Cooler" },
       liquor: bpLiquor("d1l1"),
+      chakna: chaknaSet(),
+    },
+    {
+      id: "day1b",
+      date: "2026-10-18",
+      label: "Saptami 2.0",
+      subtitle: "Adda Cholbe",
+      special: { name: "Round 2 Special" },
+      liquor: bpLiquor("d1bl1"),
       chakna: chaknaSet(),
     },
     {

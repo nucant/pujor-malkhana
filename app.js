@@ -123,10 +123,19 @@ function daysUntil(dateStr) {
   return Math.round((target - now) / 86400000);
 }
 
+function sortedDays() {
+  return state.days.slice().sort((a, b) => {
+    const da = a.date || "";
+    const db_ = b.date || "";
+    return da < db_ ? -1 : da > db_ ? 1 : 0;
+  });
+}
+
 function defaultDayId() {
   const t = todayStr();
   const hit = state.days.find((d) => d.date === t);
-  return hit ? hit.id : state.days[0] && state.days[0].id;
+  const days = sortedDays();
+  return hit ? hit.id : days[0] && days[0].id;
 }
 
 function lineTotal(it) {
@@ -224,6 +233,26 @@ const NAG_MESSAGES = [
   "Taka de na bhai, {amt} pore ache — dhoirjo shesh hocche! 😤💸",
 ];
 
+function playNagBeep() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(880, ctx.currentTime);
+    o.frequency.setValueAtTime(660, ctx.currentTime + 0.12);
+    o.frequency.setValueAtTime(880, ctx.currentTime + 0.24);
+    g.gain.setValueAtTime(0.18, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + 0.45);
+  } catch (e) {}
+}
+
 function fireDueNag() {
   if (ui.screen !== "user") {
     stopDueReminder();
@@ -238,6 +267,7 @@ function fireDueNag() {
   if (due > 0) {
     const msg = NAG_MESSAGES[Math.floor(Math.random() * NAG_MESSAGES.length)];
     toast(msg.replace("{amt}", money(due)));
+    playNagBeep();
   } else {
     stopDueReminder();
   }
@@ -465,7 +495,7 @@ function renderUser() {
 
       <section class="day-section">
         <h2 class="section-heading">Prottek Din er Hisab 📅</h2>
-        <div class="day-accordion">${renderDayAccordion(state.days, ui.activeDayId)}</div>
+        <div class="day-accordion">${renderDayAccordion(sortedDays(), ui.activeDayId)}</div>
       </section>
 
       <footer class="app-footer">Toiri holo adda diye, mod diye na 😉 · ${esc(cfg.title)}</footer>
@@ -829,7 +859,7 @@ function renderAdminMembers() {
 }
 
 function renderAdminMenu() {
-  const days = state.days;
+  const days = sortedDays();
   const divisor = state.members.length || state.config.totalPeople || 1;
   return `
     <div class="admin-menu">
@@ -1089,7 +1119,7 @@ async function addChaknaItem(dayId) {
 }
 
 async function addDay() {
-  const days = state.days;
+  const days = sortedDays();
   const last = days[days.length - 1];
   let nextDate = todayStr();
   if (last && last.date) {
